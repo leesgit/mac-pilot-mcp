@@ -1,6 +1,6 @@
 {
   "name": "mac-pilot-mcp",
-  "version": "0.3.0",
+  "version": "0.3.1",
   "description": "Self-learning macOS automation MCP server - gets smarter with every use",
   "type": "module",
   "main": "dist/index.js",
@@ -21,13 +21,23 @@
   },
   "keywords": [
     "mcp",
+    "mcp-server",
     "model-context-protocol",
     "macos",
     "automation",
     "self-learning",
     "applescript",
+    "jxa",
+    "javascript-for-automation",
     "claude",
-    "ai"
+    "claude-code",
+    "claude-desktop",
+    "cursor",
+    "ai",
+    "ai-agent",
+    "accessibility",
+    "recipes",
+    "desktop-automation"
   ],
   "author": "Byeongchang Lee <leesgit@github.com>",
   "license": "MIT",

@@ -1,40 +1,57 @@
-# mac-pilot-mcp
+<p align="center">
+  <h1 align="center">mac-pilot-mcp</h1>
+  <p align="center">
+    <strong>Self-learning macOS automation for AI agents</strong>
+  </p>
+  <p align="center">
+    The only macOS MCP server that <em>remembers</em>. Save what works, skip what doesn't.
+  </p>
+  <p align="center">
+    <a href="https://www.npmjs.com/package/mac-pilot-mcp"><img src="https://img.shields.io/npm/v/mac-pilot-mcp?color=cb3837&label=npm" alt="npm version"></a>
+    <a href="https://www.npmjs.com/package/mac-pilot-mcp"><img src="https://img.shields.io/npm/dm/mac-pilot-mcp?color=cb3837" alt="npm downloads"></a>
+    <a href="https://github.com/leesgit/mac-pilot-mcp"><img src="https://img.shields.io/github/stars/leesgit/mac-pilot-mcp?style=social" alt="GitHub stars"></a>
+    <a href="LICENSE"><img src="https://img.shields.io/badge/license-MIT-blue" alt="License"></a>
+    <a href="#"><img src="https://img.shields.io/badge/platform-macOS-000?logo=apple&logoColor=white" alt="macOS"></a>
+    <a href="#"><img src="https://img.shields.io/badge/node-%3E%3D18-339933?logo=node.js&logoColor=white" alt="Node.js"></a>
+  </p>
+</p>
 
-[![npm version](https://img.shields.io/npm/v/mac-pilot-mcp)](https://www.npmjs.com/package/mac-pilot-mcp)
-[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
-[![macOS](https://img.shields.io/badge/platform-macOS-lightgrey)](https://github.com/leesgit/mac-pilot-mcp)
+---
 
-> Self-learning macOS automation MCP server — gets smarter with every use.
+## The Problem
 
-Unlike other macOS automation MCP servers, Mac-Pilot **remembers** what worked and what didn't. Save successful automations as recipes and replay them instantly. The more you use it, the faster it gets.
+There are 7+ macOS automation MCP servers. **None of them remember anything.** Every session starts from zero — same trial and error, same failures, same wasted tokens.
 
-**Ships with 21 built-in recipes** so you can start automating immediately.
+## The Solution
 
-## Why Mac-Pilot?
+Mac-Pilot is different. It **learns from every interaction**:
 
-There are 7+ macOS automation MCP servers. None remember anything. Every session starts from zero.
+- **Success?** The pattern is auto-saved as app-specific knowledge
+- **Failure?** The error is recorded so it won't repeat the same mistake
+- **Multi-step workflow?** Save it as a recipe — replay it in one call next time
 
-Mac-Pilot is different:
-- **Learns from success** — Successful patterns are auto-saved as app knowledge
-- **Learns from failure** — Error patterns are recorded to prevent repeating mistakes
-- **App-specific knowledge** — Remembers quirks and workarounds per app
-- **21 built-in recipes** — Dark mode, volume, screenshots, clipboard, Finder, Safari, and more
-- **JXA support** — JavaScript for Automation in addition to AppleScript
-- **Security first** — Dangerous commands are blocked, everything is audit-logged
+Ships with **21 built-in recipes** so you're productive from the first run.
 
-## Installation
+---
+
+## Quick Start
+
+### Install
 
 ```bash
 npm install -g mac-pilot-mcp
 ```
 
-### Claude Code
+### Connect to your AI client
+
+<details>
+<summary><strong>Claude Code</strong></summary>
 
 ```bash
 claude mcp add mac-pilot -- mac-pilot-mcp
 ```
 
-Or add to `~/.claude.json`:
+Or manually add to `~/.claude.json`:
 
 ```json
 {
@@ -45,8 +62,10 @@ Or add to `~/.claude.json`:
   }
 }
 ```
+</details>
 
-### Claude Desktop
+<details>
+<summary><strong>Claude Desktop</strong></summary>
 
 Add to `claude_desktop_config.json`:
 
@@ -60,169 +79,300 @@ Add to `claude_desktop_config.json`:
   }
 }
 ```
+</details>
 
-### Cursor / Windsurf
+<details>
+<summary><strong>Cursor</strong></summary>
 
-Add to your MCP settings:
+Add to your MCP settings (`.cursor/mcp.json`):
 
 ```json
 {
-  "mac-pilot": {
-    "command": "npx",
-    "args": ["-y", "mac-pilot-mcp"]
+  "mcpServers": {
+    "mac-pilot": {
+      "command": "npx",
+      "args": ["-y", "mac-pilot-mcp"]
+    }
   }
 }
 ```
+</details>
 
-### macOS Permissions
+<details>
+<summary><strong>Windsurf</strong></summary>
 
-Mac-Pilot needs **Accessibility** permission for UI automation:
+Add to your MCP config:
 
-1. Open **System Settings > Privacy & Security > Accessibility**
-2. Add your terminal app (Terminal, iTerm2, VS Code, Cursor, etc.)
+```json
+{
+  "mcpServers": {
+    "mac-pilot": {
+      "command": "npx",
+      "args": ["-y", "mac-pilot-mcp"]
+    }
+  }
+}
+```
+</details>
 
-## Tools (7)
+### Grant Permissions
 
-| Tool | Description |
-|------|-------------|
-| `mac_run` | Execute AppleScript, JXA, shell commands, open apps/URLs, click, type, keypress |
-| `mac_state` | Get current system state (active app, windows, clipboard, etc.) |
-| `mac_find_ui` | Find UI elements using Accessibility API |
-| `mac_screenshot` | Capture screen/window/region as base64 PNG |
-| `mac_recipe_save` | Save a working action sequence as a reusable recipe |
-| `mac_recipe_run` | Execute a saved recipe with parameter substitution |
-| `mac_recipe_search` | Search recipes and action history |
+Mac-Pilot needs **Accessibility** access for UI automation:
 
-## The Learning Loop
+1. **System Settings** → **Privacy & Security** → **Accessibility**
+2. Toggle **ON** for your terminal app (Terminal, iTerm2, VS Code, Cursor, etc.)
+3. Restart the terminal
+
+---
+
+## How It Works
 
 ```
 You: "Export the current Figma frame as PNG"
 
-First time:
-  1. mac_recipe_search("Figma export PNG") → No results
-  2. mac_state → Figma is frontmost
-  3. mac_run (applescript) → File > Export As > PNG
-  4. mac_recipe_save("export-figma-png", steps=[...])
+┌─ First time ─────────────────────────────────────────┐
+│                                                       │
+│  1. mac_recipe_search("Figma export") → No matches   │
+│  2. mac_state() → Figma is frontmost                 │
+│  3. mac_run(applescript) → File > Export > PNG        │
+│  4. mac_recipe_save("export-figma-png", steps=[...]) │
+│                                                       │
+│  ✓ Worked! Pattern saved automatically.              │
+└───────────────────────────────────────────────────────┘
 
-Next time:
-  1. mac_recipe_search("Figma export PNG") → Found: export-figma-png (100% success rate)
-  2. mac_recipe_run("export-figma-png") → Done instantly
+┌─ Next time ───────────────────────────────────────────┐
+│                                                       │
+│  1. mac_recipe_search("Figma export")                │
+│     → Found: export-figma-png (100% success rate)    │
+│  2. mac_recipe_run("export-figma-png")               │
+│     → Done instantly                                  │
+│                                                       │
+│  ⚡ 4 steps → 2 steps. No trial and error.           │
+└───────────────────────────────────────────────────────┘
 ```
 
-## Built-in Recipes (21)
+---
 
-Mac-Pilot ships with ready-to-use recipes:
+## Tools
 
-| Category | Recipes |
-|----------|---------|
-| **System** | `toggle-dark-mode`, `get-dark-mode`, `set-volume`, `mute-toggle`, `empty-trash`, `screenshot-desktop`, `lock-screen`, `show-desktop` |
-| **Finder** | `new-finder-window`, `get-selected-files` |
-| **Safari** | `safari-current-url`, `safari-current-title` |
-| **Clipboard** | `get-clipboard`, `set-clipboard` |
-| **Notifications** | `notify` |
-| **Terminal** | `open-terminal-at`, `kill-process` |
-| **Windows** | `list-windows`, `close-front-window` |
-| **Music** | `music-play-pause`, `music-next-track` |
+| Tool | What it does |
+|------|-------------|
+| **`mac_run`** | Execute AppleScript, JXA, shell commands, open apps/URLs, click, type, keypress |
+| **`mac_state`** | Query system state — frontmost app, windows, clipboard, running apps |
+| **`mac_find_ui`** | Find UI elements via Accessibility API (buttons, fields, menus) |
+| **`mac_screenshot`** | Capture screen/window/region as base64 PNG |
+| **`mac_recipe_save`** | Save a working action sequence as a reusable recipe |
+| **`mac_recipe_run`** | Replay a saved recipe with parameter substitution |
+| **`mac_recipe_search`** | Full-text search across recipes and action history |
 
-Use any built-in recipe immediately:
-```
-mac_recipe_run { name: "toggle-dark-mode" }
-mac_recipe_run { name: "set-volume", params: { level: "50" } }
-mac_recipe_run { name: "notify", params: { title: "Done!", message: "Build complete" } }
-```
+---
+
+## Built-in Recipes
+
+21 recipes ship out of the box — no setup needed:
+
+| Category | Recipes | Example |
+|----------|---------|---------|
+| **System** | `toggle-dark-mode` `set-volume` `mute-toggle` `lock-screen` `show-desktop` `screenshot-desktop` `empty-trash` `get-dark-mode` | `mac_recipe_run { name: "toggle-dark-mode" }` |
+| **Finder** | `new-finder-window` `get-selected-files` | `mac_recipe_run { name: "new-finder-window", params: { path: "/tmp" } }` |
+| **Safari** | `safari-current-url` `safari-current-title` | `mac_recipe_run { name: "safari-current-url" }` |
+| **Clipboard** | `get-clipboard` `set-clipboard` | `mac_recipe_run { name: "set-clipboard", params: { text: "Hello" } }` |
+| **Notifications** | `notify` | `mac_recipe_run { name: "notify", params: { title: "Done", message: "Build passed" } }` |
+| **Terminal** | `open-terminal-at` `kill-process` | `mac_recipe_run { name: "open-terminal-at", params: { path: "~/dev" } }` |
+| **Windows** | `list-windows` `close-front-window` | `mac_recipe_run { name: "close-front-window" }` |
+| **Music** | `music-play-pause` `music-next-track` | `mac_recipe_run { name: "music-play-pause" }` |
+
+---
 
 ## Examples
 
 ### AppleScript
-```
-mac_run { actionType: "applescript", script: "tell application \"Finder\" to get name of every window" }
+
+```json
+{ "actionType": "applescript", "script": "tell application \"Finder\" to get name of every window" }
 ```
 
 ### JXA (JavaScript for Automation)
-```
-mac_run { actionType: "jxa", script: "Application('Safari').documents[0].url()" }
+
+```json
+{ "actionType": "jxa", "script": "Application('Safari').documents[0].url()" }
 ```
 
-### Open an app
-```
-mac_run { actionType: "open", target: "Safari" }
+### Shell command
+
+```json
+{ "actionType": "shell", "command": "ls -la ~/Desktop" }
 ```
 
-### Run a shell command
-```
-mac_run { actionType: "shell", command: "ls -la ~/Desktop" }
+### Open an app or URL
+
+```json
+{ "actionType": "open", "target": "Safari" }
+{ "actionType": "open", "target": "https://github.com" }
 ```
 
 ### Type text
-```
-mac_run { actionType: "type", text: "Hello World" }
+
+```json
+{ "actionType": "type", "text": "Hello World" }
 ```
 
 ### Keyboard shortcut
-```
-mac_run { actionType: "keypress", text: "cmd+c" }
+
+```json
+{ "actionType": "keypress", "text": "cmd+c" }
+{ "actionType": "keypress", "text": "cmd+shift+4" }
 ```
 
-### Save a recipe
+### Find UI elements
+
+```json
+mac_find_ui { "app": "Safari", "role": "AXButton" }
+mac_find_ui { "app": "Finder", "searchText": "Downloads" }
 ```
+
+### Take a screenshot
+
+```json
+mac_screenshot { "target": "screen", "scale": 0.3 }
+mac_screenshot { "target": "window", "windowName": "Safari" }
+```
+
+### Save a custom recipe
+
+```json
 mac_recipe_save {
-  name: "screenshot-desktop",
-  description: "Take a screenshot and save to Desktop",
-  steps: [
-    { actionType: "shell", params: { command: "screencapture ~/Desktop/screenshot.png" }, description: "Capture screen" }
-  ]
+  "name": "open-project",
+  "description": "Open VS Code at project directory",
+  "steps": [
+    { "actionType": "shell", "params": { "command": "code {{path}}" }, "description": "Open VS Code" }
+  ],
+  "parameters": [
+    { "name": "path", "description": "Project directory path" }
+  ],
+  "tags": ["dev", "vscode"]
 }
 ```
 
-### Search recipes
-```
-mac_recipe_search { query: "screenshot" }
-```
-
-### Run a recipe
-```
-mac_recipe_run { name: "screenshot-desktop" }
-```
+---
 
 ## Security
 
-Mac-Pilot takes security seriously:
+Mac-Pilot blocks dangerous operations before they execute:
 
-- **Blocked**: `sudo`, `rm -rf /`, `curl | sh`, `dd if=`, `$()` subshell injection, keychain access, and 20+ dangerous patterns
-- **Risk levels**: Every action is classified as low/medium/high/blocked
-- **Audit trail**: All actions (including blocked ones) are logged to SQLite
-- **Dry run**: Every tool supports `dryRun: true` to validate before executing
-- **Auto-cleanup**: Action logs older than 30 days are automatically pruned
+| Layer | Protection |
+|-------|-----------|
+| **Hard block** | `sudo`, `rm -rf /`, `curl\|sh`, `dd if=`, `$()` subshell injection, keychain access, `csrutil disable`, `diskutil erase`, and 20+ patterns |
+| **Risk classification** | Every action is rated `low` / `medium` / `high` / `blocked` |
+| **Audit log** | All actions (including blocked ones) are logged to SQLite |
+| **Dry run** | Test any action with `dryRun: true` before executing |
+| **Auto-cleanup** | Action logs older than 30 days are pruned automatically |
 
-## Data Storage
+---
 
-- Database: `~/.mac-pilot/pilot.db` (SQLite with WAL mode)
-- Contains: action logs, recipes, app knowledge, security audit log
-- Built-in recipes are auto-loaded on first run
+## Architecture
+
+```
+~/.mac-pilot/pilot.db (SQLite, WAL mode)
+├── action_log       — Every action executed, with timing + success/failure
+├── action_log_fts   — Full-text search index over action history
+├── recipes          — Saved automation sequences
+├── recipes_fts      — Full-text search index over recipes
+├── app_knowledge    — Per-app quirks, selectors, workarounds (auto-learned)
+└── security_log     — Blocked command audit trail
+```
+
+Built-in recipes are auto-loaded on first run. Your custom recipes and learned knowledge persist across sessions.
+
+---
+
+## Comparison
+
+| Feature | mac-pilot-mcp | Other MCP servers |
+|---------|:---:|:---:|
+| Self-learning (auto-saves knowledge) | **Yes** | No |
+| Reusable recipes with parameters | **Yes** | No |
+| Built-in recipe library | **21** | 0 |
+| JXA + AppleScript | **Both** | Usually one |
+| Full-text search (recipes + history) | **Yes** | No |
+| Security audit log | **Yes** | Rare |
+| Risk classification (4 levels) | **Yes** | No |
+| Dry run mode | **Yes** | Rare |
+| Action log auto-cleanup | **Yes** | No |
+
+---
 
 ## Troubleshooting
 
-### "Accessibility access not allowed"
-Your terminal app needs Accessibility permission:
-1. Open **System Settings > Privacy & Security > Accessibility**
-2. Toggle ON for your terminal app
-3. Restart your terminal
+<details>
+<summary><strong>"Accessibility access not allowed"</strong></summary>
 
-### "Application not found or not running"
-The target app must be running for `mac_find_ui` and window-based `mac_screenshot`. Open it first with `mac_run { actionType: "open", target: "AppName" }`.
+Your terminal needs Accessibility permission:
+1. **System Settings** → **Privacy & Security** → **Accessibility**
+2. Toggle **ON** for your terminal
+3. **Restart** the terminal app completely
+</details>
 
-### Screenshots are too large
-Use the `scale` parameter (default 0.5): `mac_screenshot { target: "screen", scale: 0.3 }`
+<details>
+<summary><strong>"Application not found or not running"</strong></summary>
 
-### Recipe not found
-Search first: `mac_recipe_search { query: "your keyword" }`. Recipe names are case-sensitive.
+The target app must be running. Open it first:
+```json
+mac_run { "actionType": "open", "target": "AppName" }
+```
+</details>
+
+<details>
+<summary><strong>Screenshots are too large / slow</strong></summary>
+
+Reduce the scale (default is 0.5):
+```json
+mac_screenshot { "target": "screen", "scale": 0.3 }
+```
+</details>
+
+<details>
+<summary><strong>Recipe not found</strong></summary>
+
+Recipe names are case-sensitive. Search first:
+```json
+mac_recipe_search { "query": "your keyword" }
+```
+</details>
+
+<details>
+<summary><strong>Command blocked unexpectedly</strong></summary>
+
+Use dry run to check the risk classification:
+```json
+mac_run { "actionType": "shell", "command": "your-command", "dryRun": true }
+```
+</details>
+
+---
 
 ## Requirements
 
-- macOS (darwin only)
-- Node.js >= 18
-- Accessibility permission for UI automation features
+- **macOS** (darwin only)
+- **Node.js** >= 18
+- **Accessibility** permission for UI automation
+
+---
+
+## Contributing
+
+Issues and PRs welcome at [github.com/leesgit/mac-pilot-mcp](https://github.com/leesgit/mac-pilot-mcp).
+
+```bash
+git clone https://github.com/leesgit/mac-pilot-mcp.git
+cd mac-pilot-mcp
+npm install
+npm run build
+npm test        # 144 tests
+```
+
+---
 
 ## License
 
-MIT
+MIT - [Byeongchang Lee](https://github.com/leesgit)
