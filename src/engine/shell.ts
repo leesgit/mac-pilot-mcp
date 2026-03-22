@@ -1,6 +1,6 @@
 import { execSync } from 'child_process';
 import { logError } from '../utils/logger.js';
-import { checkSecurity, hasPipeChain } from '../security/sandbox.js';
+import { hasPipeChain } from '../security/sandbox.js';
 
 export interface ShellResult {
   success: boolean;
@@ -12,16 +12,7 @@ export interface ShellResult {
 export function runShell(command: string, timeout: number = 10000): ShellResult {
   const start = Date.now();
 
-  // Security check
-  const secCheck = checkSecurity('shell', { command });
-  if (!secCheck.allowed) {
-    return {
-      success: false,
-      output: '',
-      error: `BLOCKED: ${secCheck.reason}`,
-      durationMs: Date.now() - start,
-    };
-  }
+  // Security check is already done in run.ts handleMacRun — no duplicate check here
 
   // Reject pipe chains
   if (hasPipeChain(command)) {

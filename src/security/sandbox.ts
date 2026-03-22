@@ -5,6 +5,7 @@ import type { ActionType, RiskLevel, SecurityCheckResult } from '../types.js';
 const BLOCKED_SHELL_PATTERNS: RegExp[] = [
   /rm\s+(-[rRf]+\s+|--recursive\s+)[\/~]/,
   /sudo\s+/,
+  /\bsu\s+-c\s/,
   /curl\s.*\|\s*(ba)?sh/,
   /wget\s.*\|\s*(ba)?sh/,
   /chmod\s+777/,
@@ -21,6 +22,9 @@ const BLOCKED_SHELL_PATTERNS: RegExp[] = [
   /nvram\s+/,
   /spctl\s+--master-disable/,
   /systemsetup\s+/,
+  // Subshell / command substitution injection
+  /\$\(/,
+  /`[^`]+`/,
 ];
 
 const BLOCKED_APPLESCRIPT_PATTERNS: RegExp[] = [

@@ -1,4 +1,5 @@
 import { execSync } from 'child_process';
+import crypto from 'crypto';
 import { readFileSync, unlinkSync } from 'fs';
 import { tmpdir } from 'os';
 import { join } from 'path';
@@ -47,7 +48,7 @@ export function captureRegion(
 }
 
 function captureWithTool(tool: string, args: string[], scale: number): ScreenshotResult {
-  const tmpPath = join(tmpdir(), `mac-pilot-${Date.now()}.png`);
+  const tmpPath = join(tmpdir(), `mac-pilot-${crypto.randomUUID()}.png`);
 
   try {
     execSync(`${tool} ${args.join(' ')} ${tmpPath}`, {
@@ -60,10 +61,23 @@ function captureWithTool(tool: string, args: string[], scale: number): Screensho
     // Scale down if needed (use sips for macOS native resize)
     if (scale < 1.0) {
       try {
-        const resizedPath = join(tmpdir(), `mac-pilot-resized-${Date.now()}.png`);
-        const percentage = Math.round(scale * 100);
+        const resizedPath = join(tmpdir(), `mac-pilot-resized-${crypto.randomUUID()}.png`);
+        // sips --resampleHeightWidthMax expects pixels, not percentage
+        // Read original dimensions and compute target max dimension
+        const sizeOutput = execSync(
+          `sips -g pixelWidth -g pixelHeight ${tmpPath} 2>/dev/null`,
+          { encoding: 'utf-8', timeout: 5000 }
+        );
+        const widthMatch = sizeOutput.match(/pixelWidth:\s*(\d+)/);
+        const heightMatch = sizeOutput.match(/pixelHeight:\s*(\d+)/);
+        const maxDim = Math.max(
+          parseInt(widthMatch?.[1] ?? '1920', 10),
+          parseInt(heightMatch?.[1] ?? '1080', 10),
+        );
+        const targetMax = Math.round(maxDim * scale);
+
         execSync(
-          `sips --resampleHeightWidthMax ${percentage}% ${tmpPath} --out ${resizedPath} 2>/dev/null`,
+          `sips --resampleHeightWidthMax ${targetMax} ${tmpPath} --out ${resizedPath} 2>/dev/null`,
           { timeout: 5000, stdio: ['pipe', 'pipe', 'pipe'] }
         );
         const resizedBuffer = readFileSync(resizedPath);

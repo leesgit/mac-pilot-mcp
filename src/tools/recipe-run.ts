@@ -98,7 +98,9 @@ function substituteParams(step: RecipeStep, params: Record<string, string>): Rec
 
   for (const [key, value] of Object.entries(params)) {
     const placeholder = `{{${key}}}`;
-    paramsStr = paramsStr.replaceAll(placeholder, value);
+    // Escape value for safe JSON embedding (handle quotes and backslashes)
+    const safeValue = value.replace(/\\/g, '\\\\').replace(/"/g, '\\"');
+    paramsStr = paramsStr.replaceAll(placeholder, safeValue);
     descStr = descStr.replaceAll(placeholder, value);
   }
 

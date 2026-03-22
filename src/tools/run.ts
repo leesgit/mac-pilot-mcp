@@ -69,6 +69,15 @@ export function handleMacRun(
       });
 
       if (!result.success) {
+        // Auto-learn: save error pattern as app knowledge
+        if (appContext && result.error) {
+          db.saveAppKnowledge({
+            appName: appContext,
+            knowledgeType: 'workaround',
+            content: `AppleScript error: ${result.error.slice(0, 200)}`,
+          });
+        }
+
         // Attach app knowledge if available
         const knowledge = appContext ? db.getAppKnowledge(appContext) : [];
         const hints = knowledge.length > 0
@@ -77,6 +86,16 @@ export function handleMacRun(
 
         return textResult(`Error: ${result.error}${hints}`, true);
       }
+
+      // Auto-learn: reinforce successful patterns
+      if (appContext) {
+        db.saveAppKnowledge({
+          appName: appContext,
+          knowledgeType: 'selector',
+          content: `Successful script hash: ${hashScript(script!)}`,
+        });
+      }
+
       return textResult(result.output || '(no output)');
     }
 
@@ -94,6 +113,14 @@ export function handleMacRun(
       });
 
       if (!result.success) {
+        // Auto-learn: save error pattern
+        if (appContext && result.error) {
+          db.saveAppKnowledge({
+            appName: appContext,
+            knowledgeType: 'workaround',
+            content: `Shell error: ${result.error.slice(0, 200)}`,
+          });
+        }
         return textResult(`Error: ${result.error}`, true);
       }
       return textResult(result.output || '(no output)');
@@ -151,9 +178,12 @@ export function handleMacRun(
     }
 
     case 'type': {
+      const safeText = text!
+        .replace(/\\/g, '\\\\')
+        .replace(/"/g, '\\"');
       const typeScript = `
         tell application "System Events"
-          keystroke "${text!.replace(/"/g, '\\"')}"
+          keystroke "${safeText}"
         end tell
       `;
       const result = runAppleScript(typeScript, timeout);

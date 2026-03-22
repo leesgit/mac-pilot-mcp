@@ -20,12 +20,14 @@ describe('runShell', () => {
     expect(result.output).toBe('/Users/test');
   });
 
-  it('should block dangerous commands', () => {
-    const result = runShell('sudo rm -rf /');
-    expect(result.success).toBe(false);
-    expect(result.error).toContain('BLOCKED');
-    // execSync should NOT be called
-    expect(childProcess.execSync).not.toHaveBeenCalled();
+  // Note: dangerous command blocking is now handled at run.ts level (checkSecurity)
+  // shell.ts only checks for pipe chains
+  it('should allow simple commands (security is checked upstream)', () => {
+    vi.mocked(childProcess.execSync).mockReturnValue('root\n');
+
+    const result = runShell('whoami');
+    expect(result.success).toBe(true);
+    expect(result.output).toBe('root');
   });
 
   it('should block pipe chains', () => {

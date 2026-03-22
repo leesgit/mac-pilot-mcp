@@ -17,11 +17,13 @@ export function findUIElements(
   const maxResults = options?.maxResults ?? 10;
 
   // Build JXA script to query UI elements
+  const escapeJxa = (s: string) => s.replace(/\\/g, '\\\\').replace(/'/g, "\\'");
+
   const filterParts: string[] = [];
-  if (options?.role) filterParts.push(`el.role() === '${options.role}'`);
-  if (options?.title) filterParts.push(`el.title() === '${options.title}'`);
+  if (options?.role) filterParts.push(`el.role() === '${escapeJxa(options.role)}'`);
+  if (options?.title) filterParts.push(`el.title() === '${escapeJxa(options.title)}'`);
   if (options?.searchText) {
-    const escaped = options.searchText.replace(/'/g, "\\'");
+    const escaped = escapeJxa(options.searchText);
     filterParts.push(`(el.title() && el.title().toLowerCase().includes('${escaped.toLowerCase()}')) || (el.description() && el.description().toLowerCase().includes('${escaped.toLowerCase()}'))`);
   }
 
