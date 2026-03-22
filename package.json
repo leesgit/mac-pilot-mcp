@@ -1,0 +1,62 @@
+{
+  "name": "mac-pilot-mcp",
+  "version": "0.1.0",
+  "description": "Self-learning macOS automation MCP server - gets smarter with every use",
+  "type": "module",
+  "main": "dist/index.js",
+  "bin": {
+    "mac-pilot-mcp": "dist/index.js"
+  },
+  "scripts": {
+    "build": "tsc",
+    "dev": "tsc --watch",
+    "start": "node dist/index.js",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "test:coverage": "vitest run --coverage",
+    "prepublishOnly": "npm run build && npm test",
+    "release:patch": "npm version patch && npm publish",
+    "release:minor": "npm version minor && npm publish",
+    "release:major": "npm version major && npm publish"
+  },
+  "keywords": [
+    "mcp",
+    "model-context-protocol",
+    "macos",
+    "automation",
+    "self-learning",
+    "applescript",
+    "claude",
+    "ai"
+  ],
+  "author": "Byeongchang Lee <leesgit@github.com>",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/leesgit/mac-pilot-mcp.git"
+  },
+  "homepage": "https://github.com/leesgit/mac-pilot-mcp#readme",
+  "bugs": {
+    "url": "https://github.com/leesgit/mac-pilot-mcp/issues"
+  },
+  "os": ["darwin"],
+  "engines": {
+    "node": ">=18.0.0"
+  },
+  "files": [
+    "dist",
+    "README.md",
+    "LICENSE"
+  ],
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.0.0",
+    "better-sqlite3": "^12.6.2",
+    "zod": "^3.23.0"
+  },
+  "devDependencies": {
+    "@types/better-sqlite3": "^7.6.13",
+    "@types/node": "^20.0.0",
+    "typescript": "^5.0.0",
+    "vitest": "^1.6.0"
+  }
+}
