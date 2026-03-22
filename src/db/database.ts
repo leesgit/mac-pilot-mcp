@@ -416,7 +416,39 @@ export class PilotDatabase {
     }>;
   }
 
+  // === Built-in Recipes ===
+
+  loadBuiltinRecipes(recipes: Array<{
+    name: string;
+    description: string;
+    app?: string;
+    steps: Array<{ actionType: string; params: Record<string, unknown>; description: string }>;
+    tags: string[];
+  }>): number {
+    let loaded = 0;
+    for (const recipe of recipes) {
+      const existing = this.getRecipe(recipe.name);
+      if (!existing) {
+        this.saveRecipe({
+          name: recipe.name,
+          description: recipe.description,
+          app: recipe.app,
+          steps: JSON.stringify(recipe.steps),
+          tags: JSON.stringify(recipe.tags),
+        });
+        loaded++;
+      }
+    }
+    return loaded;
+  }
+
   // === Cleanup ===
+
+  cleanupOldLogs(maxAge: number = 30 * 24 * 60 * 60 * 1000): number {
+    const cutoff = new Date(Date.now() - maxAge).toISOString();
+    const result = this.db.prepare('DELETE FROM action_log WHERE created_at < ?').run(cutoff);
+    return result.changes;
+  }
 
   close(): void {
     this.db.close();

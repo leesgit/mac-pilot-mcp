@@ -1,7 +1,7 @@
 import type { CallToolResult } from '../types.js';
 import { textResult } from '../types.js';
 import { MacRunSchema } from '../schemas.js';
-import { runAppleScript } from '../engine/applescript.js';
+import { runAppleScript, runJxa } from '../engine/applescript.js';
 import { runShell } from '../engine/shell.js';
 import { checkSecurity } from '../security/sandbox.js';
 import type { PilotDatabase } from '../db/database.js';
@@ -93,6 +93,47 @@ export function handleMacRun(
           appName: appContext,
           knowledgeType: 'selector',
           content: `Successful script hash: ${hashScript(script!)}`,
+        });
+      }
+
+      return textResult(result.output || '(no output)');
+    }
+
+    case 'jxa': {
+      const result = runJxa(script!, timeout);
+      db.logAction({
+        actionType,
+        appContext,
+        params: JSON.stringify(args),
+        result: result.output || undefined,
+        success: result.success,
+        errorMessage: result.error,
+        durationMs: result.durationMs,
+        scriptHash: hashScript(script!),
+      });
+
+      if (!result.success) {
+        if (appContext && result.error) {
+          db.saveAppKnowledge({
+            appName: appContext,
+            knowledgeType: 'workaround',
+            content: `JXA error: ${result.error.slice(0, 200)}`,
+          });
+        }
+
+        const knowledge = appContext ? db.getAppKnowledge(appContext) : [];
+        const hints = knowledge.length > 0
+          ? `\n\nKnown tips for ${appContext}:\n${knowledge.map(k => `- [${k.knowledge_type}] ${k.content}`).join('\n')}`
+          : '';
+
+        return textResult(`Error: ${result.error}${hints}`, true);
+      }
+
+      if (appContext) {
+        db.saveAppKnowledge({
+          appName: appContext,
+          knowledgeType: 'selector',
+          content: `Successful JXA hash: ${hashScript(script!)}`,
         });
       }
 

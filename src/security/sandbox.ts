@@ -86,6 +86,9 @@ function classifyActionRisk(actionType: ActionType, params: Record<string, unkno
     case 'applescript':
       return classifyAppleScriptRisk(String(params.script ?? ''));
 
+    case 'jxa':
+      return classifyAppleScriptRisk(String(params.script ?? ''));
+
     case 'open':
       return 'low';
 

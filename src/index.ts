@@ -10,12 +10,13 @@ import {
 import { getDatabase } from './db/database.js';
 import { AuditLogger } from './security/audit.js';
 import { tools, handleTool } from './tools/index.js';
+import { BUILTIN_RECIPES } from './recipes/builtin.js';
 import { log } from './utils/logger.js';
 
 const server = new Server(
   {
     name: 'mac-pilot',
-    version: '0.1.0',
+    version: '0.3.0',
   },
   {
     capabilities: {
@@ -32,6 +33,13 @@ function ensureInit() {
   if (!db) {
     db = getDatabase();
     audit = new AuditLogger(db);
+    // Load built-in recipes on first init
+    const loaded = db.loadBuiltinRecipes(BUILTIN_RECIPES);
+    if (loaded > 0) {
+      log(`Loaded ${loaded} built-in recipes`);
+    }
+    // Cleanup old action logs (>30 days)
+    db.cleanupOldLogs();
   }
 }
 
@@ -66,7 +74,7 @@ process.on('SIGTERM', shutdown);
 async function main() {
   const transport = new StdioServerTransport();
   await server.connect(transport);
-  log('Mac-Pilot MCP v0.2.0 started (7 tools, self-learning macOS automation)');
+  log('Mac-Pilot MCP v0.3.0 started (7 tools + 21 recipes, self-learning macOS automation)');
 }
 
 main().catch((error) => {

@@ -16,16 +16,16 @@ import { handleRecipeSearch } from './recipe-search.js';
 export const tools: Tool[] = [
   {
     name: 'mac_run',
-    description: 'Execute a macOS action: applescript, shell command, open app/URL, click, type, or keypress. All actions are automatically logged for learning.',
+    description: 'Execute a macOS action: applescript, jxa (JavaScript for Automation), shell command, open app/URL, click, type, or keypress. All actions are automatically logged for learning.',
     inputSchema: {
       type: 'object',
       properties: {
         actionType: {
           type: 'string',
-          enum: ['applescript', 'shell', 'open', 'click', 'type', 'keypress'],
+          enum: ['applescript', 'jxa', 'shell', 'open', 'click', 'type', 'keypress'],
           description: 'Type of action to execute',
         },
-        script: { type: 'string', description: 'AppleScript code (required for applescript)' },
+        script: { type: 'string', description: 'AppleScript or JXA code (required for applescript/jxa)' },
         command: { type: 'string', description: 'Shell command (required for shell)' },
         target: { type: 'string', description: 'App name, URL, or file path (required for open)' },
         x: { type: 'number', description: 'X coordinate (required for click)' },
@@ -111,7 +111,7 @@ export const tools: Tool[] = [
           items: {
             type: 'object',
             properties: {
-              actionType: { type: 'string', enum: ['applescript', 'shell', 'open', 'click', 'type', 'keypress'] },
+              actionType: { type: 'string', enum: ['applescript', 'jxa', 'shell', 'open', 'click', 'type', 'keypress'] },
               params: { type: 'object', description: 'Action parameters' },
               description: { type: 'string', description: 'What this step does' },
             },

@@ -23,7 +23,7 @@ export function textResult(text: string, isError?: boolean): CallToolResult {
 
 // === Action Types ===
 
-export type ActionType = 'applescript' | 'shell' | 'open' | 'click' | 'type' | 'keypress';
+export type ActionType = 'applescript' | 'jxa' | 'shell' | 'open' | 'click' | 'type' | 'keypress';
 
 export type RiskLevel = 'low' | 'medium' | 'high' | 'blocked';
 

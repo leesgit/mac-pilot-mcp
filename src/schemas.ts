@@ -3,7 +3,7 @@ import { z } from 'zod';
 // === mac_run ===
 
 export const ActionTypeEnum = z.enum([
-  'applescript', 'shell', 'open', 'click', 'type', 'keypress'
+  'applescript', 'jxa', 'shell', 'open', 'click', 'type', 'keypress'
 ]);
 
 export const MacRunSchema = z.object({
@@ -19,6 +19,7 @@ export const MacRunSchema = z.object({
   dryRun: z.boolean().default(false).optional(),
 }).refine(data => {
   if (data.actionType === 'applescript' && !data.script) return false;
+  if (data.actionType === 'jxa' && !data.script) return false;
   if (data.actionType === 'shell' && !data.command) return false;
   if (data.actionType === 'open' && !data.target) return false;
   if (data.actionType === 'click' && (data.x === undefined || data.y === undefined)) return false;
