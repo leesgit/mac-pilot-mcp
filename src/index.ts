@@ -16,7 +16,7 @@ import { log } from './utils/logger.js';
 const server = new Server(
   {
     name: 'mac-pilot',
-    version: '0.3.0',
+    version: '0.3.1',
   },
   {
     capabilities: {
@@ -58,23 +58,38 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
 
 // === Graceful Shutdown ===
 
-async function shutdown() {
+let shuttingDown = false;
+
+async function shutdown(reason: string, exitCode = 0) {
+  if (shuttingDown) return;
+  shuttingDown = true;
   try {
     await server.close();
     if (db) db.close();
   } catch { /* ignore */ }
-  process.exit(0);
+  if (reason !== 'SIGINT' && reason !== 'SIGTERM') {
+    console.error(`[mac-pilot] shutdown reason: ${reason}`);
+  }
+  process.exit(exitCode);
 }
 
-process.on('SIGINT', shutdown);
-process.on('SIGTERM', shutdown);
+process.on('SIGINT', () => shutdown('SIGINT'));
+process.on('SIGTERM', () => shutdown('SIGTERM'));
+process.on('uncaughtException', (err) => {
+  console.error('[mac-pilot] uncaughtException', err);
+  shutdown('uncaughtException', 1);
+});
+process.on('unhandledRejection', (reason) => {
+  console.error('[mac-pilot] unhandledRejection', reason);
+  shutdown('unhandledRejection', 1);
+});
 
 // === Start Server ===
 
 async function main() {
   const transport = new StdioServerTransport();
   await server.connect(transport);
-  log('Mac-Pilot MCP v0.3.0 started (7 tools + 21 recipes, self-learning macOS automation)');
+  log('Mac-Pilot MCP v0.3.1 started (7 tools + 21 recipes, sandbox-protected macOS automation)');
 }
 
 main().catch((error) => {

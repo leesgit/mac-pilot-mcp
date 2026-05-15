@@ -10,8 +10,19 @@ const DB_PATH = path.join(DB_DIR, 'pilot.db');
 
 function ensureDir(dir: string): void {
   if (!fs.existsSync(dir)) {
-    fs.mkdirSync(dir, { recursive: true });
+    fs.mkdirSync(dir, { recursive: true, mode: 0o700 });
   }
+}
+
+// On unix, lock down the data dir + db file so other local users can't read
+// recipes, action logs, or knowledge entries. No-op on platforms where chmod
+// is meaningless (Windows).
+function lockdownPermissions(dir: string, dbPath: string): void {
+  if (process.platform === 'win32') return;
+  try {
+    fs.chmodSync(dir, 0o700);
+    if (fs.existsSync(dbPath)) fs.chmodSync(dbPath, 0o600);
+  } catch { /* best effort */ }
 }
 
 // === Database 클래스 ===
@@ -22,9 +33,18 @@ export class PilotDatabase {
   constructor(dbPath?: string) {
     const resolvedPath = dbPath ?? DB_PATH;
     const dir = path.dirname(resolvedPath);
-    ensureDir(dir);
+    const isInMemory = resolvedPath === ':memory:';
+    if (!isInMemory) ensureDir(dir);
     this.db = new Database(resolvedPath);
+    if (!isInMemory) lockdownPermissions(dir, resolvedPath);
     this.db.pragma('journal_mode = WAL');
+    // Wait up to 5s on lock contention instead of throwing SQLITE_BUSY.
+    // Required because multiple MCP requests can hit the recipe-stats write
+    // path concurrently (recipe_run + log + knowledge update).
+    this.db.pragma('busy_timeout = 5000');
+    // WAL + NORMAL is the recommended pairing: durability still survives
+    // crashes, and we avoid an fsync on every commit.
+    this.db.pragma('synchronous = NORMAL');
     this.db.pragma('foreign_keys = ON');
     this.init();
   }
@@ -262,14 +282,19 @@ export class PilotDatabase {
   }
 
   updateRecipeStats(name: string, success: boolean): void {
-    this.db.prepare(`
+    // Wrap in a transaction so concurrent invocations of the same recipe
+    // can't interleave the read-modify-write of run_count / success_count.
+    const stmt = this.db.prepare(`
       UPDATE recipes
       SET run_count = run_count + 1,
           success_count = success_count + CASE WHEN ? THEN 1 ELSE 0 END,
           last_run_at = CURRENT_TIMESTAMP,
           updated_at = CURRENT_TIMESTAMP
       WHERE name = ?
-    `).run(success ? 1 : 0, name);
+    `);
+    this.db.transaction(() => {
+      stmt.run(success ? 1 : 0, name);
+    })();
   }
 
   searchRecipes(query: string, app?: string): Array<{
