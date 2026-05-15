@@ -10,6 +10,10 @@ import { handleMacScreenshot } from './screenshot.js';
 import { handleRecipeSave } from './recipe-save.js';
 import { handleRecipeRun } from './recipe-run.js';
 import { handleRecipeSearch } from './recipe-search.js';
+import { handleRecipeExport } from './recipe-export.js';
+import { handleRecipeImport } from './recipe-import.js';
+import { handleMacPermissions } from './permissions.js';
+import { handleMacClipboard } from './clipboard.js';
 
 // === Tool Definitions ===
 
@@ -249,6 +253,95 @@ Limitations:
       required: ['query'],
     },
   },
+  {
+    name: 'mac_recipe_export',
+    description: `Export saved recipes as a portable .mac-recipe.json bundle. By default, only user-added recipes (not the 118 built-ins) are exported.
+
+Examples:
+  - Export one recipe inline: { name: "open-url-in-private" }
+  - Export all user recipes to a file: { outputPath: "~/recipes/backup.json" }
+  - Include built-ins: { outputPath: "~/recipes/full.json", includeBuiltins: true }
+
+Format: \`mac-recipe-bundle/v1\` (versioned for forward compatibility).
+Limitations: outputPath must resolve under $HOME and end with .json.`,
+    inputSchema: {
+      type: 'object',
+      properties: {
+        name: { type: 'string', description: 'Single recipe name to export (omit = export all user recipes)' },
+        outputPath: { type: 'string', description: 'Path to write bundle (must be under $HOME and end with .json). Omit to return inline.' },
+        includeBuiltins: { type: 'boolean', description: 'Include the 118 built-in recipes (default: false)' },
+      },
+    },
+  },
+  {
+    name: 'mac_recipe_import',
+    description: `Import a .mac-recipe.json bundle from inline data or a file path.
+
+Examples:
+  - From file: { inputPath: "~/recipes/team-bundle.json" }
+  - From file with replace policy: { inputPath: "~/recipes/team.json", onConflict: "replace" }
+  - Inline bundle: { bundle: { format: "mac-recipe-bundle/v1", exportedAt: "...", recipes: [...] } }
+
+Conflict policy:
+  - "skip" (default): keep existing recipe
+  - "rename": append "-imported-N" until name is unique
+  - "replace": delete existing first
+
+Limitations:
+  - Provide exactly one of \`bundle\` or \`inputPath\`.
+  - Bundle format major version is enforced — v2 bundles rejected.`,
+    inputSchema: {
+      type: 'object',
+      properties: {
+        bundle: { type: 'object', description: 'Inline bundle object (format: mac-recipe-bundle/v1)' },
+        inputPath: { type: 'string', description: 'Path to bundle file (must be under $HOME and end with .json)' },
+        onConflict: { type: 'string', enum: ['skip', 'rename', 'replace'], description: 'How to handle existing recipes with the same name (default: skip)' },
+      },
+    },
+  },
+  {
+    name: 'mac_permissions',
+    description: `Check macOS Privacy & Security permissions (Automation, Accessibility, Screen Recording) for the current MCP client. Returns a deep-link to the relevant Privacy preferences pane if a permission is missing.
+
+Examples:
+  - { check: "all" } → return state of all 3 permissions
+  - { check: "accessibility" } → only Accessibility
+
+Limitations:
+  - macOS doesn't expose TCC state to ordinary processes. We probe by attempting a known-safe operation and observing the error class.
+  - "Screen Recording" cannot be detected reliably without invoking a screenshot; we report "unknown" instead of guessing.`,
+    inputSchema: {
+      type: 'object',
+      properties: {
+        check: {
+          type: 'string',
+          enum: ['all', 'automation', 'accessibility', 'screen_recording'],
+          description: 'Which permission to check (default: all)',
+        },
+      },
+    },
+  },
+  {
+    name: 'mac_clipboard',
+    description: `Read or write the system clipboard. Separated from \`mac_state\` so reads/writes don't require pulling the rest of system state.
+
+Examples:
+  - Read text: { action: "read" }
+  - Write text: { action: "write", text: "hello" }
+  - Clear: { action: "clear" }
+
+Limitations:
+  - Text only. Images/files in the clipboard appear as their typed name.
+  - No clipboard history — only the current value.`,
+    inputSchema: {
+      type: 'object',
+      properties: {
+        action: { type: 'string', enum: ['read', 'write', 'clear'], description: 'Clipboard operation' },
+        text: { type: 'string', description: 'Text to write (required when action = "write")' },
+      },
+      required: ['action'],
+    },
+  },
 ];
 
 // === Tool Handler Router ===
@@ -274,6 +367,14 @@ export async function handleTool(
       return handleRecipeRun(args, db, audit);
     case 'mac_recipe_search':
       return handleRecipeSearch(args, db);
+    case 'mac_recipe_export':
+      return handleRecipeExport(args, db);
+    case 'mac_recipe_import':
+      return handleRecipeImport(args, db);
+    case 'mac_permissions':
+      return handleMacPermissions(args);
+    case 'mac_clipboard':
+      return handleMacClipboard(args);
     default:
       return textResult(`Unknown tool: ${name}`, true);
   }

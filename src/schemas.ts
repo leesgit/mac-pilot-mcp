@@ -115,3 +115,43 @@ export const MacRecipeSearchSchema = z.object({
   app: z.string().optional(),
   includeHistory: z.boolean().default(false).optional(),
 });
+
+// === mac_recipe_export / mac_recipe_import ===
+
+export const MacRecipeExportSchema = z.object({
+  // `null` / undefined = export all user-saved recipes.
+  // Empty string is rejected so a typo doesn't silently dump everything.
+  name: z.string().min(1).optional(),
+  // Where to write the bundle. If absent the bundle is returned inline.
+  outputPath: z.string().optional(),
+  includeBuiltins: z.boolean().default(false).optional(),
+});
+
+// `.mac-recipe.json` format — versioned so we can evolve it later.
+export const ExportedRecipeSchema = z.object({
+  name: z.string(),
+  description: z.string(),
+  app: z.string().nullable().optional(),
+  steps: z.array(RecipeStepSchema),
+  parameters: z.array(RecipeParameterSchema).optional(),
+  tags: z.array(z.string()).optional(),
+});
+
+export const RecipeBundleSchema = z.object({
+  // Bumped on any breaking schema change. Importer rejects unknown majors.
+  format: z.literal('mac-recipe-bundle/v1'),
+  exportedAt: z.string(),
+  source: z.string().optional(),
+  recipes: z.array(ExportedRecipeSchema),
+});
+
+export const MacRecipeImportSchema = z.object({
+  // Exactly one of these must be present.
+  bundle: RecipeBundleSchema.optional(),
+  inputPath: z.string().optional(),
+  // `skip` (default) keeps the existing recipe on name collision.
+  // `rename` appends a suffix. `replace` deletes the existing first.
+  onConflict: z.enum(['skip', 'rename', 'replace']).default('skip').optional(),
+}).refine(d => (d.bundle !== undefined) !== (d.inputPath !== undefined), {
+  message: 'Provide exactly one of `bundle` or `inputPath`',
+});
