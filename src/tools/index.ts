@@ -16,7 +16,20 @@ import { handleRecipeSearch } from './recipe-search.js';
 export const tools: Tool[] = [
   {
     name: 'mac_run',
-    description: 'Execute a macOS action: applescript, jxa (JavaScript for Automation), shell command, open app/URL, click, type, or keypress. All actions are automatically logged for learning.',
+    description: `Execute a macOS action. Supported actionTypes: applescript, jxa, shell, open, click, type, keypress.
+
+Examples:
+  - Open Safari: { actionType: "open", target: "Safari" }
+  - Type text: { actionType: "type", text: "hello world" }
+  - Cmd+C: { actionType: "keypress", text: "cmd+c" }
+  - Run AppleScript: { actionType: "applescript", script: 'tell application "Finder" to activate', appContext: "Finder" }
+  - List files: { actionType: "shell", command: "ls -la ~/Documents" }
+
+Limitations:
+  - Requires Accessibility + Automation permissions for click/type/keypress and AS targeting other apps.
+  - Cannot bypass the lock screen.
+  - Dangerous shell patterns (rm -rf /, curl|sh, sudo, etc.) are blocked by the sandbox.
+  - Set appContext for the best self-learning: errors get classified per-app and reliable hints are auto-prepended on subsequent calls.`,
     inputSchema: {
       type: 'object',
       properties: {
@@ -40,7 +53,16 @@ export const tools: Tool[] = [
   },
   {
     name: 'mac_state',
-    description: 'Get current macOS system state: frontmost app, window list, clipboard, selected files in Finder, running apps.',
+    description: `Inspect current macOS state (read-only). Returns frontmost app, window list, clipboard, Finder selection, and/or running apps.
+
+Examples:
+  - All state: {} (returns everything)
+  - Just clipboard + frontmost: { include: ["clipboard", "frontmost_app"] }
+  - Window list only: { include: ["windows"] }
+
+Limitations:
+  - Window list uses Accessibility and only shows windows from apps the client has been granted access to.
+  - Clipboard returns the text representation only — images/files appear as their typed name.`,
     inputSchema: {
       type: 'object',
       properties: {
@@ -57,7 +79,19 @@ export const tools: Tool[] = [
   },
   {
     name: 'mac_find_ui',
-    description: 'Find UI elements in an app using macOS Accessibility API. Returns element properties, position, and role. For Electron apps (VSCode, Cursor, Slack, Discord), pass useElectronFallback:"auto" to enrich AX with Chrome DevTools Protocol when the app is launched with --remote-debugging-port=<PORT>.',
+    description: `Find UI elements in an app via the macOS Accessibility API. Returns role, title, position, and size.
+
+Examples:
+  - All buttons in Safari: { app: "Safari", role: "AXButton" }
+  - Element by title: { app: "Mail", title: "Send" }
+  - Fuzzy search: { app: "Finder", searchText: "Documents" }
+  - Electron AX (VSCode with --remote-debugging-port=9222): { app: "Visual Studio Code", useElectronFallback: true }
+  - Auto-fallback for known Electron apps: { app: "Cursor", useElectronFallback: "auto" }
+
+Limitations:
+  - Requires Accessibility permission for the client app.
+  - Electron apps (VSCode, Cursor, Slack, Discord) expose a thin AX tree; use useElectronFallback when AX returns empty.
+  - CDP fallback needs the user to relaunch the app with --remote-debugging-port=<PORT>.`,
     inputSchema: {
       type: 'object',
       properties: {
@@ -77,7 +111,18 @@ export const tools: Tool[] = [
   },
   {
     name: 'mac_screenshot',
-    description: 'Capture a screenshot of the screen, a window, or a region. Returns base64-encoded PNG image.',
+    description: `Capture screen, window, or region as base64 PNG.
+
+Examples:
+  - Full screen: { target: "screen" }
+  - Specific app window: { target: "window", windowName: "Safari" }
+  - Region (x,y from top-left): { target: "region", region: { x: 0, y: 0, width: 800, height: 600 } }
+  - High-fidelity capture: { target: "screen", scale: 1.0 } (warning: larger token cost)
+
+Limitations:
+  - Requires Screen Recording permission (System Settings → Privacy & Security → Screen Recording).
+  - Default scale is 0.5 to keep token cost reasonable; bump for OCR-quality captures.
+  - Cursor is not included in the capture.`,
     inputSchema: {
       type: 'object',
       properties: {
@@ -104,7 +149,27 @@ export const tools: Tool[] = [
   },
   {
     name: 'mac_recipe_save',
-    description: 'Save a successful sequence of actions as a reusable recipe. Recipes can have parameters ({{paramName}}) for flexibility. This is how Mac-Pilot learns.',
+    description: `Save a multi-step automation as a named recipe. Parameters use {{name}} placeholders, substituted at run time (JSON-safe, supports quotes/backslashes/newlines).
+
+Example:
+  {
+    name: "open-url-in-private",
+    description: "Open a URL in Safari private window",
+    app: "Safari",
+    steps: [
+      { actionType: "open", params: { target: "Safari" }, description: "Launch Safari" },
+      { actionType: "keypress", params: { text: "cmd+shift+n" }, description: "Open private window" },
+      { actionType: "keypress", params: { text: "cmd+l" }, description: "Focus address bar" },
+      { actionType: "type", params: { text: "{{url}}" }, description: "Enter URL" },
+      { actionType: "keypress", params: { text: "return" }, description: "Navigate" }
+    ],
+    parameters: [{ name: "url", description: "URL to open" }],
+    tags: ["safari", "browser", "private"]
+  }
+
+Limitations:
+  - Recipe names are unique. Re-saving the same name fails — delete or rename.
+  - Each step's params goes through the security sandbox at run time.`,
     inputSchema: {
       type: 'object',
       properties: {
@@ -143,7 +208,16 @@ export const tools: Tool[] = [
   },
   {
     name: 'mac_recipe_run',
-    description: 'Execute a saved recipe by name. Provide parameter values to customize execution. Stops on first failure.',
+    description: `Run a saved recipe by name with parameter values.
+
+Examples:
+  - { name: "toggle-dark-mode" }
+  - { name: "open-url-in-private", params: { url: "https://example.com" } }
+  - Dry run (preview steps): { name: "send-email", params: { ... }, dryRun: true }
+
+Limitations:
+  - Stops on the first failed step (no partial rollback).
+  - Each step inherits the recipe's app as appContext for self-learning.`,
     inputSchema: {
       type: 'object',
       properties: {
@@ -156,7 +230,15 @@ export const tools: Tool[] = [
   },
   {
     name: 'mac_recipe_search',
-    description: 'Search saved recipes and optionally action history. Use this before attempting a new automation — Mac-Pilot may already know how.',
+    description: `Search recipes (and optionally raw action history) by natural-language query. Call this BEFORE writing new AppleScript — 118 built-in recipes cover most common tasks.
+
+Examples:
+  - { query: "dark mode" } → matches toggle-dark-mode, get-dark-mode
+  - { query: "screenshot", app: "Finder" }
+  - { query: "send email", includeHistory: true }
+
+Limitations:
+  - FTS5 tokenizer is English-biased. For Korean/CJK, supplement with the \`app\` filter.`,
     inputSchema: {
       type: 'object',
       properties: {

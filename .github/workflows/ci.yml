@@ -1,0 +1,57 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  test:
+    name: ${{ matrix.os }} / Node ${{ matrix.node }}
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        # Mac-Pilot is macOS-only at runtime, but the build/unit tests are
+        # platform-agnostic. Running across macOS versions catches Node ABI
+        # drift in better-sqlite3 prebuilds and Buffer API regressions.
+        os: [macos-13, macos-14, macos-15]
+        node: ['20', '22']
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ matrix.node }}
+          cache: npm
+
+      - name: Install
+        run: npm ci
+
+      - name: Build
+        run: npm run build
+
+      - name: Test
+        run: npm test
+
+      - name: Verify dist (no uncommitted compiled output drift)
+        run: |
+          if [ -n "$(git status --porcelain dist 2>/dev/null)" ]; then
+            echo "dist/ differs from committed output — rebuild and commit" >&2
+            git --no-pager diff dist | head -40
+            exit 1
+          fi
+
+  security-audit:
+    name: npm audit (high+)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      # `npm audit` exits non-zero on any high/critical advisory; we accept
+      # moderate as informational. Fail the build only when something
+      # high-severity ships in the lockfile.
+      - run: npm audit --audit-level=high
