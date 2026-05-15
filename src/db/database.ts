@@ -135,6 +135,8 @@ export class PilotDatabase {
         knowledge_type TEXT NOT NULL,
         content TEXT NOT NULL,
         reliability REAL DEFAULT 1.0,
+        hit_count INTEGER DEFAULT 0,
+        last_hint_at DATETIME,
         created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
         updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
       );
@@ -142,6 +144,20 @@ export class PilotDatabase {
       CREATE INDEX IF NOT EXISTS idx_app_knowledge_app ON app_knowledge(app_name);
       CREATE UNIQUE INDEX IF NOT EXISTS idx_app_knowledge_unique
         ON app_knowledge(app_name, knowledge_type, content);
+
+      -- 자동 promotion 후보 (성공 패턴 N회 누적 시 recipe 제안용)
+      CREATE TABLE IF NOT EXISTS action_patterns (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        app_name TEXT NOT NULL,
+        action_type TEXT NOT NULL,
+        pattern_key TEXT NOT NULL,
+        success_count INTEGER DEFAULT 1,
+        last_success_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+        created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+      );
+
+      CREATE UNIQUE INDEX IF NOT EXISTS idx_action_patterns_unique
+        ON action_patterns(app_name, action_type, pattern_key);
 
       -- 보안 감사 로그
       CREATE TABLE IF NOT EXISTS security_log (
@@ -398,6 +414,77 @@ export class PilotDatabase {
       knowledge_type: string;
       content: string;
       reliability: number;
+    }>;
+  }
+
+  /**
+   * Hints filtered to highest-reliability entries, suitable for prepending to
+   * a tool result. Limited by `limit` (default 3) so we don't flood the model.
+   * Also bumps hit_count + last_hint_at so we can decay stale knowledge later.
+   */
+  getReliableHints(appName: string, limit: number = 3): Array<{
+    knowledge_type: string;
+    content: string;
+    reliability: number;
+  }> {
+    const rows = this.db.prepare(
+      `SELECT id, knowledge_type, content, reliability
+       FROM app_knowledge
+       WHERE app_name = ? AND reliability >= 0.7
+       ORDER BY reliability DESC, updated_at DESC
+       LIMIT ?`
+    ).all(appName, limit) as Array<{
+      id: number;
+      knowledge_type: string;
+      content: string;
+      reliability: number;
+    }>;
+
+    if (rows.length > 0) {
+      const ids = rows.map(r => r.id);
+      const placeholders = ids.map(() => '?').join(',');
+      this.db.prepare(
+        `UPDATE app_knowledge
+         SET hit_count = hit_count + 1, last_hint_at = CURRENT_TIMESTAMP
+         WHERE id IN (${placeholders})`
+      ).run(...ids);
+    }
+
+    return rows.map(({ id: _id, ...rest }) => rest);
+  }
+
+  /**
+   * Record one successful (app, actionType, pattern) observation. After
+   * `promotionThreshold` successes the same pattern becomes a recipe-suggestion
+   * candidate via `getPromotionCandidates`.
+   */
+  recordSuccessPattern(entry: { appName: string; actionType: string; patternKey: string }): void {
+    this.db.prepare(
+      `INSERT INTO action_patterns (app_name, action_type, pattern_key)
+       VALUES (?, ?, ?)
+       ON CONFLICT(app_name, action_type, pattern_key) DO UPDATE SET
+         success_count = success_count + 1,
+         last_success_at = CURRENT_TIMESTAMP`
+    ).run(entry.appName, entry.actionType, entry.patternKey);
+  }
+
+  getPromotionCandidates(threshold: number = 3, limit: number = 10): Array<{
+    app_name: string;
+    action_type: string;
+    pattern_key: string;
+    success_count: number;
+  }> {
+    return this.db.prepare(
+      `SELECT app_name, action_type, pattern_key, success_count
+       FROM action_patterns
+       WHERE success_count >= ?
+       ORDER BY success_count DESC, last_success_at DESC
+       LIMIT ?`
+    ).all(threshold, limit) as Array<{
+      app_name: string;
+      action_type: string;
+      pattern_key: string;
+      success_count: number;
     }>;
   }
 

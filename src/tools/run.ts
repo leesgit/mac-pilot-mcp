@@ -7,7 +7,57 @@ import { checkSecurity } from '../security/sandbox.js';
 import type { PilotDatabase } from '../db/database.js';
 import { type AuditLogger, maskSensitive } from '../security/audit.js';
 import { hashScript } from '../utils/hash.js';
+import { classifyError, knowledgeKey, renderHint } from '../learning/error-patterns.js';
 import { execSync } from 'child_process';
+
+/**
+ * Pull the highest-reliability hints for `appContext` and prepend them as a
+ * compact block. Returns "" when there's no app context or no hints — calling
+ * code should append to the regular result with no other modifications.
+ */
+function prependHints(db: PilotDatabase, appContext: string | undefined): string {
+  if (!appContext) return '';
+  const hints = db.getReliableHints(appContext, 3);
+  if (hints.length === 0) return '';
+  const lines = hints.map(h => `- [${h.knowledge_type} • ${(h.reliability).toFixed(2)}] ${h.content}`);
+  return `<mac-pilot-hints app="${appContext}">\n${lines.join('\n')}\n</mac-pilot-hints>\n\n`;
+}
+
+/**
+ * Save a structured, deduplicated knowledge entry when a script fails. Returns
+ * the classified error so the caller can render the same hint in the result.
+ */
+function learnFromFailure(
+  db: PilotDatabase,
+  appContext: string,
+  actionType: string,
+  rawError: string,
+) {
+  const cls = classifyError(rawError);
+  db.saveAppKnowledge({
+    appName: appContext,
+    knowledgeType: 'workaround',
+    // Stable key (one row per error class + retry strategy) avoids the
+    // duplicate-error spam that plagued the previous raw-string storage.
+    content: `${knowledgeKey(appContext, actionType, cls)} → ${cls.suggestion}`,
+  });
+  return cls;
+}
+
+/**
+ * Record a meaningful success: e.g. `{appContext}.{actionType}.success` so a
+ * recipe promotion can fire after N repeats. `pattern_key` is the action
+ * shape, not the raw script hash — two different scripts that achieve the
+ * same intent count toward the same pattern.
+ */
+function learnFromSuccess(
+  db: PilotDatabase,
+  appContext: string,
+  actionType: string,
+  patternKey: string,
+) {
+  db.recordSuccessPattern({ appName: appContext, actionType, patternKey });
+}
 
 export function handleMacRun(
   args: Record<string, unknown>,
@@ -68,35 +118,25 @@ export function handleMacRun(
         scriptHash: hashScript(script!),
       });
 
+      const hintBlock = prependHints(db, appContext);
+
       if (!result.success) {
-        // Auto-learn: save error pattern as app knowledge
+        // Structured error learning: classify + dedupe by (app, type, class).
+        let suggestion = '';
         if (appContext && result.error) {
-          db.saveAppKnowledge({
-            appName: appContext,
-            knowledgeType: 'workaround',
-            content: `AppleScript error: ${result.error.slice(0, 200)}`,
-          });
+          const cls = learnFromFailure(db, appContext, 'applescript', result.error);
+          suggestion = `\n\n${renderHint(cls)}`;
         }
-
-        // Attach app knowledge if available
-        const knowledge = appContext ? db.getAppKnowledge(appContext) : [];
-        const hints = knowledge.length > 0
-          ? `\n\nKnown tips for ${appContext}:\n${knowledge.map(k => `- [${k.knowledge_type}] ${k.content}`).join('\n')}`
-          : '';
-
-        return textResult(`Error: ${result.error}${hints}`, true);
+        return textResult(`${hintBlock}Error: ${result.error}${suggestion}`, true);
       }
 
-      // Auto-learn: reinforce successful patterns
+      // Success pattern: key by `tell application "X"` shape, not raw hash.
       if (appContext) {
-        db.saveAppKnowledge({
-          appName: appContext,
-          knowledgeType: 'selector',
-          content: `Successful script hash: ${hashScript(script!)}`,
-        });
+        const tellMatch = /tell\s+application\s+"([^"]+)"\s+to\s+(\w+)/i.exec(script!);
+        const patternKey = tellMatch ? `${tellMatch[1]}/${tellMatch[2]}` : 'misc';
+        learnFromSuccess(db, appContext, 'applescript', patternKey);
       }
-
-      return textResult(result.output || '(no output)');
+      return textResult(`${hintBlock}${result.output || '(no output)'}`);
     }
 
     case 'jxa': {
@@ -112,32 +152,24 @@ export function handleMacRun(
         scriptHash: hashScript(script!),
       });
 
+      const hintBlock = prependHints(db, appContext);
+
       if (!result.success) {
+        let suggestion = '';
         if (appContext && result.error) {
-          db.saveAppKnowledge({
-            appName: appContext,
-            knowledgeType: 'workaround',
-            content: `JXA error: ${result.error.slice(0, 200)}`,
-          });
+          const cls = learnFromFailure(db, appContext, 'jxa', result.error);
+          suggestion = `\n\n${renderHint(cls)}`;
         }
-
-        const knowledge = appContext ? db.getAppKnowledge(appContext) : [];
-        const hints = knowledge.length > 0
-          ? `\n\nKnown tips for ${appContext}:\n${knowledge.map(k => `- [${k.knowledge_type}] ${k.content}`).join('\n')}`
-          : '';
-
-        return textResult(`Error: ${result.error}${hints}`, true);
+        return textResult(`${hintBlock}Error: ${result.error}${suggestion}`, true);
       }
 
       if (appContext) {
-        db.saveAppKnowledge({
-          appName: appContext,
-          knowledgeType: 'selector',
-          content: `Successful JXA hash: ${hashScript(script!)}`,
-        });
+        const appMatch = /Application\(["']([^"']+)["']\)/.exec(script!);
+        const methodMatch = /Application\([^)]+\)\.(\w+)/.exec(script!);
+        const patternKey = appMatch && methodMatch ? `${appMatch[1]}/${methodMatch[1]}` : 'misc';
+        learnFromSuccess(db, appContext, 'jxa', patternKey);
       }
-
-      return textResult(result.output || '(no output)');
+      return textResult(`${hintBlock}${result.output || '(no output)'}`);
     }
 
     case 'shell': {
@@ -153,18 +185,21 @@ export function handleMacRun(
         scriptHash: hashScript(command!),
       });
 
+      const hintBlock = prependHints(db, appContext);
+
       if (!result.success) {
-        // Auto-learn: save error pattern
+        let suggestion = '';
         if (appContext && result.error) {
-          db.saveAppKnowledge({
-            appName: appContext,
-            knowledgeType: 'workaround',
-            content: `Shell error: ${result.error.slice(0, 200)}`,
-          });
+          const cls = learnFromFailure(db, appContext, 'shell', result.error);
+          suggestion = `\n\n${renderHint(cls)}`;
         }
-        return textResult(`Error: ${result.error}`, true);
+        return textResult(`${hintBlock}Error: ${result.error}${suggestion}`, true);
       }
-      return textResult(result.output || '(no output)');
+      if (appContext) {
+        const cmdHead = command!.trim().split(/\s+/)[0] ?? 'sh';
+        learnFromSuccess(db, appContext, 'shell', cmdHead);
+      }
+      return textResult(`${hintBlock}${result.output || '(no output)'}`);
     }
 
     case 'open': {

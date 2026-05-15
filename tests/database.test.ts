@@ -302,3 +302,70 @@ describe('Security Log', () => {
     expect(logs).toHaveLength(3);
   });
 });
+
+describe('Self-learning (P1-A)', () => {
+  it('getReliableHints should only return entries with reliability >= 0.7', () => {
+    // saveAppKnowledge starts at 1.0 and decreases via decreaseKnowledgeReliability.
+    const id = db.saveAppKnowledge({
+      appName: 'Safari',
+      knowledgeType: 'workaround',
+      content: 'Use cmd+T for new tab',
+    });
+    // Force reliability below 0.7
+    db.decreaseKnowledgeReliability(id);
+    db.decreaseKnowledgeReliability(id); // 1.0 - 0.4 = 0.6 (below threshold)
+
+    const hints = db.getReliableHints('Safari');
+    expect(hints).toHaveLength(0);
+  });
+
+  it('getReliableHints should return hints at default reliability 1.0', () => {
+    db.saveAppKnowledge({
+      appName: 'Mail',
+      knowledgeType: 'quirk',
+      content: 'Compose window requires focus',
+    });
+    const hints = db.getReliableHints('Mail');
+    expect(hints).toHaveLength(1);
+    expect(hints[0].content).toBe('Compose window requires focus');
+  });
+
+  it('getReliableHints should limit results', () => {
+    for (let i = 0; i < 10; i++) {
+      db.saveAppKnowledge({
+        appName: 'Finder',
+        knowledgeType: 'tip',
+        content: `tip-${i}`,
+      });
+    }
+    const hints = db.getReliableHints('Finder', 3);
+    expect(hints).toHaveLength(3);
+  });
+
+  it('recordSuccessPattern should dedupe and increment', () => {
+    db.recordSuccessPattern({ appName: 'Safari', actionType: 'applescript', patternKey: 'Safari/activate' });
+    db.recordSuccessPattern({ appName: 'Safari', actionType: 'applescript', patternKey: 'Safari/activate' });
+    db.recordSuccessPattern({ appName: 'Safari', actionType: 'applescript', patternKey: 'Safari/activate' });
+
+    const candidates = db.getPromotionCandidates(3);
+    expect(candidates).toHaveLength(1);
+    expect(candidates[0].success_count).toBe(3);
+  });
+
+  it('getPromotionCandidates should respect threshold', () => {
+    db.recordSuccessPattern({ appName: 'Mail', actionType: 'jxa', patternKey: 'Mail/send' });
+    db.recordSuccessPattern({ appName: 'Mail', actionType: 'jxa', patternKey: 'Mail/send' });
+    expect(db.getPromotionCandidates(3)).toHaveLength(0);
+    expect(db.getPromotionCandidates(2)).toHaveLength(1);
+  });
+
+  it('updateRecipeStats should run inside a transaction', () => {
+    db.saveRecipe({ name: 'test-recipe', description: 'd', steps: '[]' });
+    db.updateRecipeStats('test-recipe', true);
+    db.updateRecipeStats('test-recipe', false);
+    db.updateRecipeStats('test-recipe', true);
+    const r = db.getRecipe('test-recipe');
+    expect(r?.run_count).toBe(3);
+    expect(r?.success_count).toBe(2);
+  });
+});

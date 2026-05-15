@@ -116,7 +116,7 @@ describe('handleMacRun', () => {
 
     expect(result.isError).toBe(true);
     const text = (result.content[0] as { text: string }).text;
-    expect(text).toContain('Known tips for Figma');
+    expect(text).toContain('<mac-pilot-hints app="Figma">');
     expect(text).toContain('File > Export As');
   });
 

@@ -92,21 +92,34 @@ export function handleRecipeRun(
   }, null, 2), !allSuccess);
 }
 
-function substituteParams(step: RecipeStep, params: Record<string, string>): RecipeStep {
-  let paramsStr = JSON.stringify(step.params);
-  let descStr = step.description;
+/**
+ * Replace `{{name}}` tokens inside a single string value. Done in raw form
+ * (not via JSON round-trip), so embedded quotes/backslashes from the user
+ * value can't break parsing — the substitution targets string fields only.
+ */
+function substituteInString(s: string, params: Record<string, string>): string {
+  return s.replace(/\{\{(\w+)\}\}/g, (match, key) => {
+    return key in params ? params[key] : match;
+  });
+}
 
-  for (const [key, value] of Object.entries(params)) {
-    const placeholder = `{{${key}}}`;
-    // Escape value for safe JSON embedding (handle quotes and backslashes)
-    const safeValue = value.replace(/\\/g, '\\\\').replace(/"/g, '\\"');
-    paramsStr = paramsStr.replaceAll(placeholder, safeValue);
-    descStr = descStr.replaceAll(placeholder, value);
+function substituteInValue(value: unknown, params: Record<string, string>): unknown {
+  if (typeof value === 'string') return substituteInString(value, params);
+  if (Array.isArray(value)) return value.map(v => substituteInValue(v, params));
+  if (value && typeof value === 'object') {
+    const out: Record<string, unknown> = {};
+    for (const [k, v] of Object.entries(value as Record<string, unknown>)) {
+      out[k] = substituteInValue(v, params);
+    }
+    return out;
   }
+  return value;
+}
 
+function substituteParams(step: RecipeStep, params: Record<string, string>): RecipeStep {
   return {
     actionType: step.actionType,
-    params: JSON.parse(paramsStr) as Record<string, unknown>,
-    description: descStr,
+    params: substituteInValue(step.params, params) as Record<string, unknown>,
+    description: substituteInString(step.description, params),
   };
 }
