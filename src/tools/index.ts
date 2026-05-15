@@ -57,7 +57,7 @@ export const tools: Tool[] = [
   },
   {
     name: 'mac_find_ui',
-    description: 'Find UI elements in an app using macOS Accessibility API. Returns element properties, position, and role.',
+    description: 'Find UI elements in an app using macOS Accessibility API. Returns element properties, position, and role. For Electron apps (VSCode, Cursor, Slack, Discord), pass useElectronFallback:"auto" to enrich AX with Chrome DevTools Protocol when the app is launched with --remote-debugging-port=<PORT>.',
     inputSchema: {
       type: 'object',
       properties: {
@@ -66,6 +66,11 @@ export const tools: Tool[] = [
         title: { type: 'string', description: 'Exact element title to search for' },
         searchText: { type: 'string', description: 'Fuzzy text search across all visible elements' },
         maxResults: { type: 'number', description: 'Max results (1-50, default: 10)' },
+        useElectronFallback: {
+          description: 'Use Chrome DevTools Protocol fallback for Electron apps. `true` = always try; `"auto"` = only for known Electron apps when AX returns empty.',
+          oneOf: [{ type: 'boolean' }, { type: 'string', enum: ['auto'] }],
+        },
+        electronCdpPort: { type: 'number', description: 'Explicit CDP port (skips auto-detect). Range 1-65535.' },
       },
       required: ['app'],
     },
@@ -166,12 +171,12 @@ export const tools: Tool[] = [
 
 // === Tool Handler Router ===
 
-export function handleTool(
+export async function handleTool(
   name: string,
   args: Record<string, unknown>,
   db: PilotDatabase,
   audit: AuditLogger,
-): CallToolResult {
+): Promise<CallToolResult> {
   switch (name) {
     case 'mac_run':
       return handleMacRun(args, db, audit);

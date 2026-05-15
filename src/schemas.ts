@@ -38,6 +38,11 @@ export const MacFindUiSchema = z.object({
   title: z.string().optional(),
   searchText: z.string().optional(),
   maxResults: z.number().min(1).max(50).default(10).optional(),
+  // Electron CDP fallback. When `true`, try CDP after AX returns no
+  // results (or whenever called explicitly). `auto` triggers the fallback
+  // only for known Electron bundle ids.
+  useElectronFallback: z.union([z.boolean(), z.literal('auto')]).optional(),
+  electronCdpPort: z.number().int().min(1).max(65535).optional(),
 });
 
 // === mac_screenshot ===
