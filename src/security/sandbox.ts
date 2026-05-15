@@ -4,6 +4,7 @@ import type { ActionType, RiskLevel, SecurityCheckResult } from '../types.js';
 
 const BLOCKED_SHELL_PATTERNS: RegExp[] = [
   /rm\s+(-[rRf]+\s+|--recursive\s+)[\/~]/,
+  /rm\s+(-[rRf]+\s+|--recursive\s+)\$(HOME|TMPDIR)/,
   /sudo\s+/,
   /\bsu\s+-c\s/,
   /curl\s.*\|\s*(ba)?sh/,
@@ -27,6 +28,17 @@ const BLOCKED_SHELL_PATTERNS: RegExp[] = [
   /`[^`]+`/,
 ];
 
+// Pipe sinks that execute the piped-in content as code.
+// `cmd | sh` is the canonical remote-code-execution shape.
+const PIPE_SINK_BLOCK = /\|\s*(ba|z)?sh\b|\|\s*eval\b|\|\s*python\d?\b|\|\s*node\b|\|\s*ruby\b|\|\s*perl\b|\|\s*tclsh\b/;
+
+// Strict mode (MAC_PILOT_SANDBOX=strict) opts into stricter chain-token
+// blocking. `;` and friends are valid in normal shell use (`ls; date`), so
+// they are NOT blocked by default — only when the operator explicitly asks.
+function isStrictMode(): boolean {
+  return process.env.MAC_PILOT_SANDBOX === 'strict';
+}
+
 const BLOCKED_APPLESCRIPT_PATTERNS: RegExp[] = [
   /keystroke.*password/i,
   /keystroke.*secret/i,
@@ -44,6 +56,20 @@ function classifyShellRisk(command: string): RiskLevel {
     if (pattern.test(command)) {
       return 'blocked';
     }
+  }
+
+  // Block any pipe whose sink is a shell/interpreter (cmd | sh, cmd | eval, ...).
+  // `hasPipeChain` ignores quoted pipes; combined with PIPE_SINK_BLOCK we catch
+  // dynamic forms the literal regex list misses (e.g. variable-built URLs).
+  if (hasPipeChain(command) && PIPE_SINK_BLOCK.test(command)) {
+    return 'blocked';
+  }
+
+  // Strict mode: forbid command chaining outside quotes. Useful in shared/
+  // multi-tenant environments where the operator wants one tool call = one
+  // command. `hasUnsafeChain` excludes quoted/escaped occurrences.
+  if (isStrictMode() && hasUnsafeChain(command)) {
+    return 'blocked';
   }
 
   // High risk: file modification, system config
@@ -69,6 +95,16 @@ function classifyAppleScriptRisk(script: string): RiskLevel {
     if (pattern.test(script)) {
       return 'blocked';
     }
+  }
+
+  // `do shell script` lets AppleScript reach into shell. Re-check the inner
+  // command against the shell ruleset so AS doesn't become an injection bypass.
+  // We match both double- and single-quoted forms used in AppleScript literals.
+  const shellMatchDouble = /do\s+shell\s+script\s+"((?:\\.|[^"\\])*)"/i.exec(script);
+  const shellMatchSingle = /do\s+shell\s+script\s+'((?:\\.|[^'\\])*)'/i.exec(script);
+  const innerCommand = shellMatchDouble?.[1] ?? shellMatchSingle?.[1];
+  if (innerCommand !== undefined) {
+    if (classifyShellRisk(innerCommand) === 'blocked') return 'blocked';
   }
 
   if (/do\s+shell\s+script/.test(script)) return 'high';
@@ -126,6 +162,28 @@ export function checkSecurity(actionType: ActionType, params: Record<string, unk
 }
 
 // === Pipe Chain Detection ===
+
+// Detect command chain tokens (`;`, `&&`, `||`) that aren't inside quotes
+// or escaped. Used only in strict mode — they're valid shell in casual use.
+export function hasUnsafeChain(command: string): boolean {
+  let inSingle = false;
+  let inDouble = false;
+
+  for (let i = 0; i < command.length; i++) {
+    const char = command[i];
+    const prev = i > 0 ? command[i - 1] : '';
+
+    if (char === "'" && prev !== '\\' && !inDouble) inSingle = !inSingle;
+    if (char === '"' && prev !== '\\' && !inSingle) inDouble = !inDouble;
+    if (inSingle || inDouble || prev === '\\') continue;
+
+    if (char === ';') return true;
+    if (char === '&' && command[i + 1] === '&') return true;
+    if (char === '|' && command[i + 1] === '|') return true;
+  }
+
+  return false;
+}
 
 export function hasPipeChain(command: string): boolean {
   // Simple pipe detection: cmd1 | cmd2

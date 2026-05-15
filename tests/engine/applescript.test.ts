@@ -6,7 +6,7 @@ vi.mock('child_process', () => ({
 }));
 
 // Import after mock
-const { runAppleScript, runJxa } = await import('../../src/engine/applescript.js');
+const { runAppleScript, runJxa, escapeForAppleScriptLiteral } = await import('../../src/engine/applescript.js');
 
 beforeEach(() => {
   vi.restoreAllMocks();
@@ -84,5 +84,35 @@ describe('runJxa', () => {
     const result = runJxa('x.invalid()');
     expect(result.success).toBe(false);
     expect(result.error).toContain('ReferenceError');
+  });
+});
+
+describe('escapeForAppleScriptLiteral (P0-7)', () => {
+  it('should escape double quotes', () => {
+    expect(escapeForAppleScriptLiteral('hello "world"')).toBe('hello \\"world\\"');
+  });
+
+  it('should escape backslashes before quotes', () => {
+    expect(escapeForAppleScriptLiteral('path\\to')).toBe('path\\\\to');
+  });
+
+  it('should escape newlines and tabs', () => {
+    expect(escapeForAppleScriptLiteral('a\nb\tc')).toBe('a\\nb\\tc');
+  });
+
+  it('should reject NUL byte', () => {
+    expect(() => escapeForAppleScriptLiteral('abc\x00def')).toThrow(/Control character/);
+  });
+
+  it('should reject ESC byte', () => {
+    expect(() => escapeForAppleScriptLiteral('abc\x1bdef')).toThrow(/Control character/);
+  });
+
+  it('should reject DEL byte', () => {
+    expect(() => escapeForAppleScriptLiteral('abc\x7fdef')).toThrow(/DEL character/);
+  });
+
+  it('should allow Korean text unchanged (other than no quotes/backslashes)', () => {
+    expect(escapeForAppleScriptLiteral('안녕하세요')).toBe('안녕하세요');
   });
 });

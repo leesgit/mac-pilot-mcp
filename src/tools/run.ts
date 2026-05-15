@@ -1,11 +1,11 @@
 import type { CallToolResult } from '../types.js';
 import { textResult } from '../types.js';
 import { MacRunSchema } from '../schemas.js';
-import { runAppleScript, runJxa } from '../engine/applescript.js';
+import { runAppleScript, runJxa, escapeForAppleScriptLiteral } from '../engine/applescript.js';
 import { runShell } from '../engine/shell.js';
 import { checkSecurity } from '../security/sandbox.js';
 import type { PilotDatabase } from '../db/database.js';
-import type { AuditLogger } from '../security/audit.js';
+import { type AuditLogger, maskSensitive } from '../security/audit.js';
 import { hashScript } from '../utils/hash.js';
 import { execSync } from 'child_process';
 
@@ -26,7 +26,7 @@ export function handleMacRun(
   audit.log({
     actionType,
     riskLevel: secCheck.riskLevel,
-    details: JSON.stringify(args).slice(0, 500),
+    details: JSON.stringify(maskSensitive(args)).slice(0, 500),
     allowed: secCheck.allowed,
   });
 
@@ -60,7 +60,7 @@ export function handleMacRun(
       db.logAction({
         actionType,
         appContext,
-        params: JSON.stringify(args),
+        params: JSON.stringify(maskSensitive(args)),
         result: result.output || undefined,
         success: result.success,
         errorMessage: result.error,
@@ -104,7 +104,7 @@ export function handleMacRun(
       db.logAction({
         actionType,
         appContext,
-        params: JSON.stringify(args),
+        params: JSON.stringify(maskSensitive(args)),
         result: result.output || undefined,
         success: result.success,
         errorMessage: result.error,
@@ -145,7 +145,7 @@ export function handleMacRun(
       db.logAction({
         actionType,
         appContext,
-        params: JSON.stringify(args),
+        params: JSON.stringify(maskSensitive(args)),
         result: result.output || undefined,
         success: result.success,
         errorMessage: result.error,
@@ -177,7 +177,7 @@ export function handleMacRun(
         db.logAction({
           actionType,
           appContext: appContext ?? target,
-          params: JSON.stringify(args),
+          params: JSON.stringify(maskSensitive(args)),
           success: true,
           durationMs: Date.now() - start,
         });
@@ -188,7 +188,7 @@ export function handleMacRun(
         db.logAction({
           actionType,
           appContext: appContext ?? target,
-          params: JSON.stringify(args),
+          params: JSON.stringify(maskSensitive(args)),
           success: false,
           errorMessage: errorMsg,
           durationMs: Date.now() - start,
@@ -207,7 +207,7 @@ export function handleMacRun(
       db.logAction({
         actionType,
         appContext,
-        params: JSON.stringify(args),
+        params: JSON.stringify(maskSensitive(args)),
         success: result.success,
         errorMessage: result.error,
         durationMs: result.durationMs,
@@ -219,9 +219,12 @@ export function handleMacRun(
     }
 
     case 'type': {
-      const safeText = text!
-        .replace(/\\/g, '\\\\')
-        .replace(/"/g, '\\"');
+      let safeText: string;
+      try {
+        safeText = escapeForAppleScriptLiteral(text!);
+      } catch (err) {
+        return textResult(`Type failed: ${(err as Error).message}`, true);
+      }
       const typeScript = `
         tell application "System Events"
           keystroke "${safeText}"
@@ -231,7 +234,7 @@ export function handleMacRun(
       db.logAction({
         actionType,
         appContext,
-        params: JSON.stringify(args),
+        params: JSON.stringify(maskSensitive(args)),
         success: result.success,
         errorMessage: result.error,
         durationMs: result.durationMs,
@@ -244,15 +247,21 @@ export function handleMacRun(
 
     case 'keypress': {
       const keyCombo = parseKeyCombo(text!);
+      let safeKey: string;
+      try {
+        safeKey = escapeForAppleScriptLiteral(keyCombo.key);
+      } catch (err) {
+        return textResult(`Keypress failed: ${(err as Error).message}`, true);
+      }
       const keypressScript = keyCombo.modifiers.length > 0
-        ? `tell application "System Events" to keystroke "${keyCombo.key}" using {${keyCombo.modifiers.join(', ')}}`
-        : `tell application "System Events" to keystroke "${keyCombo.key}"`;
+        ? `tell application "System Events" to keystroke "${safeKey}" using {${keyCombo.modifiers.join(', ')}}`
+        : `tell application "System Events" to keystroke "${safeKey}"`;
 
       const result = runAppleScript(keypressScript, timeout);
       db.logAction({
         actionType,
         appContext,
-        params: JSON.stringify(args),
+        params: JSON.stringify(maskSensitive(args)),
         success: result.success,
         errorMessage: result.error,
         durationMs: result.durationMs,
