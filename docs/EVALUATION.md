@@ -411,3 +411,67 @@
   - MCP protocol 호환성을 E에 sub-criterion으로
   - 위협 모델 표 추가 (A 카테고리)
   - 90+ 달성 불가 → 80+로 1차 목표 재설정
+
+## v3 — ralf 실측 결과 (2026-05-15, 코드 적용 후)
+
+P0 + P1 + P2 ralf 사이클 완료. 실제 점수:
+
+| # | 카테고리 | v2 (53.9) | P0 (64.0) | P1 (80.5) | P2 (85.5) | 루브릭 점수 |
+|---|---------|-----------|-----------|-----------|-----------|------------|
+| A | 보안 | 6 | 9 | 9 | **10** | hasPipeChain 활성화, do-shell-script 재귀, audit 마스킹, AS escape, 31 regression test, SECURITY-MODEL.md |
+| B | 신뢰성 | 6 | 8 | 8 | 8 | busy_timeout, transaction, graceful shutdown. retry는 P3 |
+| C | 자기학습 | 4 | 4 | 8 | 8 | error classification + 양방향 hint + promotion + JSON-safe substitution |
+| D | 도구 표면 | 6 | 6 | 9 | **10** | 11개 도구 (recipe export/import/permissions/clipboard), 118 recipes |
+| E | DX | 7 | 7 | 9 | 9 | examples/limitations, MCP 호환 매트릭스 |
+| F | macOS 깊이 | 6 | 6 | 9 | **10** | Electron CDP fallback, mac_permissions, AS+JXA+AX+CDP fallback chain |
+| G | 테스트/CI | 6 | 7 | 8 | **9** | 258 tests (144→258), CI matrix macOS 13/14/15 × Node 20/22 |
+| H | 문서/배포 | 5 | 6 | 9 | 9 | SECURITY/CONTRIBUTING/CHANGELOG/POSITIONING/SECURITY-MODEL 외. npm publish만 빠짐 → 10 불가 |
+| I | 인기도 | 1 | 1 | 1 | 1 | 외부 사이클 (npm publish + HN + stars 100+) |
+| J | moat | 5 | 6 | 7 | **8** | sandbox + learnable + Electron CDP + Anthropic 대응 포지셔닝 + marketplace |
+
+**최종 가중점수**:
+
+| # | 카테고리 | 점수 | 가중치 | 가중점수 |
+|---|----------|------|--------|----------|
+| A | 보안 | 10 | 17 | 17.0 |
+| B | 신뢰성 | 8 | 14 | 11.2 |
+| C | 자기학습 | 8 | 13 | 10.4 |
+| D | 도구 표면 | 10 | 9 | 9.0 |
+| E | DX | 9 | 9 | 8.1 |
+| F | macOS 깊이 | 10 | 10 | 10.0 |
+| G | 테스트/CI | 9 | 8 | 7.2 |
+| H | 문서/배포 | 9 | 8 | 7.2 |
+| I | 인기도 | 1 | 6 | 0.6 |
+| J | moat | 8 | 6 | 4.8 |
+| **최종** | | | **100** | **🏆 85.5/100** |
+
+**v2 예측 (P2 후 87±4)** vs **v3 실측 85.5** → lower bound 근접, 정확.
+
+**남은 격차 (90+로 가는 경로)**:
+- I 1→4 (npm publish + 10+ stars) = +1.8pt
+- H 9→10 (npm publish 완료) = +0.8pt
+- J 8→9 (HN/awesome list 등재) = +0.6pt
+- E 9→10 (i18n + 한국어 README) = +0.9pt
+
+→ 89.6pt. 90+ launch + 2주 정도면 90.x 도달 가능.
+
+**코드 작업만으로는 85.5가 한계** (v2 예측 정확). 90+는 인기도/문서 항목이 외부 사이클로 올라야 가능.
+
+## v3 결과물 인덱스
+
+작성된 파일 (15개):
+- `docs/EVALUATION.md` — 이 문서
+- `docs/IMPROVEMENT_PLAN.md` — 우선순위 + 코스트
+- `docs/POSITIONING.md` — 시장 위치 + Anthropic 대응
+- `docs/SECURITY-MODEL.md` — defense layer 명세
+- `docs/MCP-COMPATIBILITY.md` — 5+ client 호환 매트릭스
+- `docs/ELECTRON-SUPPORT.md` — CDP fallback 가이드
+- `docs/RECIPES.md` — 118 recipe 카테고리별 일람
+- `SECURITY.md` — threat model + disclosure
+- `CONTRIBUTING.md` — recipe 기여 가이드
+- `CHANGELOG.md` — keepachangelog
+- `.github/workflows/ci.yml` — 6 job matrix
+- `src/learning/error-patterns.ts` — 진짜 self-learning loop
+- `src/engine/electron-fallback.ts` — Electron CDP (zero deps)
+- `src/tools/recipe-export.ts` / `recipe-import.ts` / `permissions.ts` / `clipboard.ts` — 새 도구 4개
+- `tests/security/regression.test.ts` — 31 bypass 시도
