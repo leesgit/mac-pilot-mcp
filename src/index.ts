@@ -16,7 +16,7 @@ import { log } from './utils/logger.js';
 const server = new Server(
   {
     name: 'mac-pilot',
-    version: '0.3.1',
+    version: '0.4.0',
   },
   {
     capabilities: {
@@ -89,7 +89,7 @@ process.on('unhandledRejection', (reason) => {
 async function main() {
   const transport = new StdioServerTransport();
   await server.connect(transport);
-  log('Mac-Pilot MCP v0.3.1 started (7 tools + 21 recipes, sandbox-protected macOS automation)');
+  log('Mac-Pilot MCP v0.4.0 started (11 tools + 118 built-in recipes, sandbox-protected macOS automation)');
 }
 
 main().catch((error) => {
