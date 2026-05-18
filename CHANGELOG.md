@@ -5,6 +5,63 @@ All notable changes to Mac-Pilot MCP will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.4.1] - 2026-05-18
+
+Honesty-and-hardening release. After v0.4.0 we ran an external review
+that found ~21 points of score inflation in the self-evaluation; this
+patch fixes the real problems behind that gap. See
+[docs/EVALUATION.md § v4](https://github.com/leesgit/mac-pilot-mcp/blob/main/docs/EVALUATION.md)
+for the full audit.
+
+### Added
+- **Promotion loop now reaches the LLM** (P3): after a pattern succeeds
+  3+ times for the same app, the next tool result for that app includes
+  `💡 You've completed "<app>/<pattern>" N times — consider mac_recipe_save`.
+  Previously `getPromotionCandidates` was a DB method with no consumer —
+  a dead-end advertised in the marketing copy. It now closes.
+- **`MAC_PILOT_SANDBOX=allowlist` mode** (P4-S4): in allowlist mode, only
+  shell commands whose head appears in `MAC_PILOT_ALLOWLIST` (comma-separated)
+  pass. The denylist still applies on top, so an allowlisted head can't
+  smuggle `cmd | sh`.
+- **`docs/SECURITY-MODEL.md § Known transitive CVEs`**: documents the
+  upstream `hono` / `path-to-regexp` advisories carried by
+  `@modelcontextprotocol/sdk` and explains why CI gates on `critical` only.
+
+### Changed
+- **`sudo` regex is now case-insensitive** (P4-S3): `Sudo`, `SUDO`, `sUdO`
+  all match. macOS PATH does not provide a `Sudo` binary so the
+  false-positive risk is zero.
+- **`rm -rf $HOME` family** (P4-S1): the pattern now also catches
+  `"$HOME"`, `$TMPDIR`, and `$PWD` variants regardless of casing.
+- **Bare `eval` in strict mode** (P4-S2): `eval foo` and `; eval foo` are
+  rejected when `MAC_PILOT_SANDBOX=strict`. Default mode still allows
+  bare eval (legitimate patterns exist) but `eval $(…)` was already
+  blocked via the `$(` rule.
+- **CI: `npm audit` gates on `critical` only**. The two upstream `high`
+  advisories in transitive deps are out of our reach until the SDK ships.
+  The change moves CI from permanently red to green-by-default.
+- **CI: removed dist-drift step**. `dist/` is `.gitignored`, so the
+  `git status --porcelain dist` guard was dead code that always passed.
+- **README**: the `docs/ELECTRON-SUPPORT.md` link is now an absolute
+  GitHub URL so it resolves on the npmjs.com README page (relative links
+  break there).
+- **Tool descriptions**: each tool now opens with a single 80-character
+  line so MCP client pickers (Claude Desktop, Cursor) don't truncate the
+  most important text. Examples and limitations follow on subsequent lines.
+- **`mac_state` description**: explicitly steers callers to `mac_clipboard`
+  for read/write. The `clipboard` include enum stays for back-compat and
+  will be removed in 1.0.
+
+### Fixed
+- Test suite reorganized: the previous "known limitation: capital `Sudo`
+  is allowed" pin is now a block assertion (the limitation is gone).
+- 271/271 tests pass (was 258).
+
+### Honest scoring
+External reviewer score after this patch: ~70/100 (was 64.5). The full
+83 ceiling requires directory listings + stars + 6 weeks of adoption.
+See `docs/EVALUATION.md § v4` for the rubric.
+
 ## [0.4.0] - 2026-05-16
 
 First public npm release. Bundles every P0/P1/P2 change from the

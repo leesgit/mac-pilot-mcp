@@ -1,6 +1,6 @@
 {
   "name": "mac-pilot-mcp",
-  "version": "0.4.0",
+  "version": "0.4.1",
   "description": "Sandbox-protected macOS automation MCP server with a persistent recipe DB, Electron CDP fallback, and self-correcting per-app knowledge",
   "type": "module",
   "main": "dist/index.js",
