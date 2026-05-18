@@ -120,6 +120,44 @@ describe('handleMacRun', () => {
     expect(text).toContain('File > Export As');
   });
 
+  it('should surface a promotion suggestion after N successes (P3 dead-end fix)', () => {
+    // 3 prior successes for the same Calendar/add pattern primes promotion.
+    db.recordSuccessPattern({ appName: 'Calendar', actionType: 'applescript', patternKey: 'Calendar/make' });
+    db.recordSuccessPattern({ appName: 'Calendar', actionType: 'applescript', patternKey: 'Calendar/make' });
+    db.recordSuccessPattern({ appName: 'Calendar', actionType: 'applescript', patternKey: 'Calendar/make' });
+
+    vi.mocked(childProcess.execSync).mockReturnValue('OK\n');
+
+    const result = handleMacRun(
+      { actionType: 'applescript', script: 'tell application "Calendar" to make event', appContext: 'Calendar' },
+      db,
+      audit,
+    );
+
+    expect(result.isError).toBeUndefined();
+    const text = (result.content[0] as { text: string }).text;
+    // The hint block must appear and include the promotion suggestion line.
+    expect(text).toContain('<mac-pilot-hints app="Calendar">');
+    expect(text).toContain('mac_recipe_save');
+    expect(text).toMatch(/Calendar\/Calendar\/make/);
+  });
+
+  it('should NOT promote patterns below threshold', () => {
+    // Only one success — below the threshold of 3.
+    db.recordSuccessPattern({ appName: 'Mail', actionType: 'applescript', patternKey: 'Mail/send' });
+
+    vi.mocked(childProcess.execSync).mockReturnValue('OK\n');
+
+    const result = handleMacRun(
+      { actionType: 'applescript', script: 'tell application "Mail" to send', appContext: 'Mail' },
+      db,
+      audit,
+    );
+
+    const text = (result.content[0] as { text: string }).text;
+    expect(text).not.toContain('mac_recipe_save');
+  });
+
   it('should execute open action', () => {
     vi.mocked(childProcess.execSync).mockReturnValue('');
 

@@ -14,12 +14,35 @@ import { execSync } from 'child_process';
  * Pull the highest-reliability hints for `appContext` and prepend them as a
  * compact block. Returns "" when there's no app context or no hints — calling
  * code should append to the regular result with no other modifications.
+ *
+ * Also surfaces one promotion candidate (top success_count) per response so
+ * the LLM/user discovers when a pattern is worth saving as a recipe. The
+ * dead-end loop fixed: previously `getPromotionCandidates` had no consumer,
+ * making the "learn from success" path invisible. Now exactly one suggestion
+ * rides on the next tool result for that app.
  */
 function prependHints(db: PilotDatabase, appContext: string | undefined): string {
   if (!appContext) return '';
   const hints = db.getReliableHints(appContext, 3);
-  if (hints.length === 0) return '';
-  const lines = hints.map(h => `- [${h.knowledge_type} • ${(h.reliability).toFixed(2)}] ${h.content}`);
+
+  // Suggest at most one promotion. We pick the highest-count pattern for THIS
+  // app (filter client-side from the global top-N) so the suggestion is
+  // contextually relevant; if the top global pattern is from another app we
+  // simply skip suggesting on this call.
+  const candidates = db.getPromotionCandidates(3, 10).filter(c => c.app_name === appContext);
+  const promotion = candidates[0];
+  const promotionLine = promotion
+    ? `💡 You've completed "${promotion.app_name}/${promotion.pattern_key}" via ${promotion.action_type} ${promotion.success_count} times — consider mac_recipe_save to make it reusable.`
+    : '';
+
+  if (hints.length === 0 && !promotionLine) return '';
+
+  const lines: string[] = [];
+  for (const h of hints) {
+    lines.push(`- [${h.knowledge_type} • ${(h.reliability).toFixed(2)}] ${h.content}`);
+  }
+  if (promotionLine) lines.push(promotionLine);
+
   return `<mac-pilot-hints app="${appContext}">\n${lines.join('\n')}\n</mac-pilot-hints>\n\n`;
 }
 
