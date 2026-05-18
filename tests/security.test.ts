@@ -334,6 +334,85 @@ describe('checkSecurity - strict mode (P0-3)', () => {
   });
 });
 
+describe('checkSecurity - P4 hardening', () => {
+  afterEach(() => {
+    delete process.env.MAC_PILOT_SANDBOX;
+    delete process.env.MAC_PILOT_ALLOWLIST;
+  });
+
+  // S1
+  it('should block rm -rf $HOME (variable expansion)', () => {
+    const result = checkSecurity('shell', { command: 'rm -rf $HOME/Documents' });
+    expect(result.allowed).toBe(false);
+  });
+
+  it('should block rm -rf "$HOME"', () => {
+    const result = checkSecurity('shell', { command: 'rm -rf "$HOME"' });
+    expect(result.allowed).toBe(false);
+  });
+
+  // S3
+  it('should block Sudo with capital S (case-insensitive)', () => {
+    const result = checkSecurity('shell', { command: 'Sudo apt-get update' });
+    expect(result.allowed).toBe(false);
+  });
+
+  it('should block SUDO uppercase', () => {
+    const result = checkSecurity('shell', { command: 'SUDO ls' });
+    expect(result.allowed).toBe(false);
+  });
+
+  // S2 — `eval $(...)` is blocked even in default mode because `$(`
+  // (subshell substitution) is already in BLOCKED_SHELL_PATTERNS. Use
+  // a non-substitution form to test the bare-eval rule on its own.
+  it('should allow bare eval (no $) in default mode', () => {
+    const result = checkSecurity('shell', { command: 'eval foo' });
+    expect(result.allowed).toBe(true);
+  });
+
+  it('should block bare eval in strict mode', () => {
+    process.env.MAC_PILOT_SANDBOX = 'strict';
+    const result = checkSecurity('shell', { command: 'eval foo' });
+    expect(result.allowed).toBe(false);
+  });
+
+  it('should block chained eval in strict mode', () => {
+    process.env.MAC_PILOT_SANDBOX = 'strict';
+    const result = checkSecurity('shell', { command: 'true; eval foo' });
+    expect(result.allowed).toBe(false);
+  });
+
+  // S4 allowlist mode
+  it('should block any command not in allowlist when mode=allowlist', () => {
+    process.env.MAC_PILOT_SANDBOX = 'allowlist';
+    process.env.MAC_PILOT_ALLOWLIST = 'ls,pwd,date';
+    const result = checkSecurity('shell', { command: 'rm /tmp/foo' });
+    expect(result.allowed).toBe(false);
+  });
+
+  it('should allow allowlisted commands', () => {
+    process.env.MAC_PILOT_SANDBOX = 'allowlist';
+    process.env.MAC_PILOT_ALLOWLIST = 'ls,pwd,date';
+    const result = checkSecurity('shell', { command: 'ls -la' });
+    expect(result.allowed).toBe(true);
+  });
+
+  it('allowlist should still apply denylist on top', () => {
+    // `ls` is allowlisted but `ls | sh` is still a pipe-to-shell RCE.
+    process.env.MAC_PILOT_SANDBOX = 'allowlist';
+    process.env.MAC_PILOT_ALLOWLIST = 'ls,echo,sh';
+    const result = checkSecurity('shell', { command: 'ls /tmp | sh' });
+    expect(result.allowed).toBe(false);
+  });
+
+  it('empty MAC_PILOT_ALLOWLIST blocks everything in allowlist mode', () => {
+    process.env.MAC_PILOT_SANDBOX = 'allowlist';
+    process.env.MAC_PILOT_ALLOWLIST = '';
+    const result = checkSecurity('shell', { command: 'ls' });
+    expect(result.allowed).toBe(false);
+  });
+});
+
 describe('maskSensitive (P0-2)', () => {
   it('should mask password values', () => {
     const result = maskSensitive({ password: 'hunter2', user: 'alice' });

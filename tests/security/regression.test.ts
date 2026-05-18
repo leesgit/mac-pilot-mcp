@@ -34,12 +34,12 @@ describe('Security regression - Shell bypass attempts', () => {
     expect(result.riskLevel).toBe('blocked');
   });
 
-  // (3) Case sensitivity. BLOCKED_SHELL_PATTERNS for sudo is /sudo\s+/ (no
-  // `i` flag). `Sudo` would not resolve to a sudo binary on a normal PATH
-  // anyway, so passing it through is acceptable. Pin the behavior.
-  it('known limitation: capital `Sudo` is allowed (sudo regex is case-sensitive)', () => {
+  // (3) Case sensitivity — now blocked by P4-S3 (sudo regex carries /i flag).
+  // `Sudo` and `SUDO` no longer pass. The pin flipped from "known limitation"
+  // to "block assertion" once we enabled case-insensitive matching.
+  it('should block capital `Sudo` (P4-S3 case-insensitive)', () => {
     const result = checkSecurity('shell', { command: 'Sudo echo hi' });
-    expect(result.allowed).toBe(true);
+    expect(result.allowed).toBe(false);
   });
 
   // (4) Comment injection. In bash, `ls # ; rm -rf /` runs only `ls` — the

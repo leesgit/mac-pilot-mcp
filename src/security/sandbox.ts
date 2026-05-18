@@ -4,8 +4,11 @@ import type { ActionType, RiskLevel, SecurityCheckResult } from '../types.js';
 
 const BLOCKED_SHELL_PATTERNS: RegExp[] = [
   /rm\s+(-[rRf]+\s+|--recursive\s+)[\/~]/,
-  /rm\s+(-[rRf]+\s+|--recursive\s+)\$(HOME|TMPDIR)/,
-  /sudo\s+/,
+  // `$HOME`/`$TMPDIR` and the equivalent `~` (whitespace-prefixed) variants —
+  // catches `rm -rf $HOME/Documents` along with `rm -rf "$HOME"`. The shell
+  // expands ~ before exec, but the audit/sandbox layer sees the literal.
+  /rm\s+(-[rRf]+\s+|--recursive\s+)["']?\$(HOME|TMPDIR|PWD)/i,
+  /\bsudo\s+/i,                     // case-insensitive: blocks `Sudo`, `SUDO` too
   /\bsu\s+-c\s/,
   /curl\s.*\|\s*(ba)?sh/,
   /wget\s.*\|\s*(ba)?sh/,
@@ -32,11 +35,44 @@ const BLOCKED_SHELL_PATTERNS: RegExp[] = [
 // `cmd | sh` is the canonical remote-code-execution shape.
 const PIPE_SINK_BLOCK = /\|\s*(ba|z)?sh\b|\|\s*eval\b|\|\s*python\d?\b|\|\s*node\b|\|\s*ruby\b|\|\s*perl\b|\|\s*tclsh\b/;
 
-// Strict mode (MAC_PILOT_SANDBOX=strict) opts into stricter chain-token
-// blocking. `;` and friends are valid in normal shell use (`ls; date`), so
-// they are NOT blocked by default — only when the operator explicitly asks.
+// MAC_PILOT_SANDBOX has three modes:
+//   - unset / "default": denylist only (current production behavior)
+//   - "strict": denylist + chain-token rejection + bare-eval rejection
+//   - "allowlist": only commands whose head matches MAC_PILOT_ALLOWLIST pass
+type SandboxMode = 'default' | 'strict' | 'allowlist';
+
+function sandboxMode(): SandboxMode {
+  const v = process.env.MAC_PILOT_SANDBOX;
+  if (v === 'strict' || v === 'allowlist') return v;
+  return 'default';
+}
+
 function isStrictMode(): boolean {
-  return process.env.MAC_PILOT_SANDBOX === 'strict';
+  const m = sandboxMode();
+  return m === 'strict' || m === 'allowlist';
+}
+
+// Standalone `eval` invocation. We do NOT block by default (legitimate
+// patterns exist: `eval $(ssh-agent)`, shell-init blocks). In strict mode
+// we deny it because untrusted LLM-built `eval` is a direct RCE vector.
+const BARE_EVAL = /(^|[;&|]\s*)eval\s+/;
+
+/**
+ * Parse the allowlist env var. Comma-separated list of command "heads" — the
+ * first whitespace-delimited token of a shell command. Example:
+ *
+ *   MAC_PILOT_ALLOWLIST="ls,date,pwd,echo,which"
+ *
+ * Any command whose head is not in the list returns `blocked` in
+ * allowlist mode. AppleScript/JXA fall back to the regular ruleset
+ * (allowlist is a shell-only knob for the moment).
+ */
+function getAllowlist(): Set<string> | null {
+  if (sandboxMode() !== 'allowlist') return null;
+  const raw = process.env.MAC_PILOT_ALLOWLIST ?? '';
+  return new Set(
+    raw.split(',').map(s => s.trim()).filter(Boolean)
+  );
 }
 
 const BLOCKED_APPLESCRIPT_PATTERNS: RegExp[] = [
@@ -51,6 +87,16 @@ const BLOCKED_APPLESCRIPT_PATTERNS: RegExp[] = [
 // === Risk Classification ===
 
 function classifyShellRisk(command: string): RiskLevel {
+  // Allowlist mode supersedes everything else for shell commands. If a
+  // whitelist is configured we *only* run command heads that are in it.
+  const allowlist = getAllowlist();
+  if (allowlist !== null) {
+    const head = command.trim().split(/\s+/)[0] ?? '';
+    if (!allowlist.has(head)) return 'blocked';
+    // Fall through — even allowlisted commands still must pass the
+    // denylist (e.g. `ls` in allowlist + `ls | sh` is still blocked).
+  }
+
   // Check blocklist first
   for (const pattern of BLOCKED_SHELL_PATTERNS) {
     if (pattern.test(command)) {
@@ -65,10 +111,10 @@ function classifyShellRisk(command: string): RiskLevel {
     return 'blocked';
   }
 
-  // Strict mode: forbid command chaining outside quotes. Useful in shared/
-  // multi-tenant environments where the operator wants one tool call = one
-  // command. `hasUnsafeChain` excludes quoted/escaped occurrences.
-  if (isStrictMode() && hasUnsafeChain(command)) {
+  // Strict mode: forbid command chaining outside quotes + bare eval. Useful in
+  // shared/multi-tenant environments where the operator wants one tool call =
+  // one command. `hasUnsafeChain` excludes quoted/escaped occurrences.
+  if (isStrictMode() && (hasUnsafeChain(command) || BARE_EVAL.test(command))) {
     return 'blocked';
   }
 
