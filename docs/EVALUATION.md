@@ -457,6 +457,89 @@ P0 + P1 + P2 ralf 사이클 완료. 실제 점수:
 
 **코드 작업만으로는 85.5가 한계** (v2 예측 정확). 90+는 인기도/문서 항목이 외부 사이클로 올라야 가능.
 
+---
+
+## v4 — 외부 reviewer 결과 (2026-05-18, publish 후 재검증)
+
+ralf 사이클 종료 후 4개 sub-agent로 외부 시점 재평가. 결과: **자체 85.5점은 21점 인플레, 정직한 점수는 64.5점**.
+
+### v4가 발견한 자체 평가의 문제 (sycophancy 패턴)
+
+자체 평가 v3는 정직한 risk section과 inflated scoring table을 함께 담음. risk를 인지하면서도 점수에 반영하지 않은 카테고리:
+
+| # | 자체 v3 | 외부 v4 | Δ | 외부 근거 |
+|---|---------|---------|---|-----------|
+| A 보안 | 10 | **7** | -3 | "31 negative test" 중 8개는 known-limitation 통과 assertion (rm -rf $HOME, bare eval, Sudo, unicode lookalike 등). 실제 block assertion은 18개. whitelist mode 부재 |
+| B 신뢰성 | 8 | **6** | -2 | retry 메커니즘 부재 (P3로 deferred). 자체 rubric 8점 기준 "transient retry ≥1" 미충족 |
+| C 자기학습 | 8 | **6** | -2 | **promotion loop가 dead-end** — `getPromotionCandidates`는 DB에 있지만 호출 path 0개. LLM에 도달 안 함. `learnFromSuccess`는 counter만 저장하고 actionable context 없음 |
+| D 도구 표면 | 10 | **8** | -2 | MCP client 3+ compat은 *spec 문서*만 있고 *CI 검증*은 없음 |
+| E DX | 9 | **8** | -1 | `mac_state.include`에 clipboard enum 남아있음 (mac_clipboard와 중복) |
+| F macOS 깊이 | 10 | **8** | -2 | CI matrix는 *Node/build 호환성*만 검증. 실제 `osascript`/AX API 호출하는 e2e test 0건. Vision OCR 부재 (rubric 10점 요구) |
+| G 테스트/CI | 9 | **7** | -2 | **npm audit fail** (transitive hono ReDoS). **dist drift step은 dead code** (.gitignore된 dist를 검증). coverage 측정 부재 |
+| H 문서/배포 | 9 | **6** | -3 | 자체 rubric "8 = npm published" 정의해놓고 publish 안 한 상태에서 9 award. 내부 모순 |
+| I 인기도 | 1 | 1 | 0 | 일치 |
+| J moat | 8 | **5** | -3 | sandbox는 주말 1개로 복제 가능 (denylist + 재귀 1회). marketplace 미구현 |
+| **총** | **85.5** | **🔴 64.5** | **-21** | |
+
+### v4가 발견한 누락 약점 3가지
+
+1. **Promotion loop dead-end**: self-learning 마케팅의 핵심인데 LLM이 절대 못 봄. `getPromotionCandidates` 호출하는 도구/hint path 0개.
+2. **CI는 macOS API를 exercise하지 않음**: matrix는 Node 호환성만 검증. `osascript` 깨져도 CI green.
+3. **외부 검증 (recipe 갯수)**: reviewer는 "118 recipes는 60-65개 가능성"이라 의심했으나, 4-space indent grep 결과 **정확히 118개 확인됨**. 이건 자체 평가가 맞고 reviewer가 틀린 부분.
+
+### v4가 발견한 추가 현실 (3일 사이 일어난 일)
+
+- **Anthropic이 2026-03-24에 Claude Cowork + Claude Code에 native macOS automation 출시** — 자체 평가에서 "6-12개월 내 30% 확률 위협"이라 했던 게 **이미 일어났음**. Mac-Pilot 자체 평가는 이를 모름.
+- 다만 Anthropic native는 **Claude Cowork/Code 전용 ($20-200/mo)**. Mac-Pilot의 실제 TAM은 "Cursor/Cline/Windsurf/Continue/Claude Code CLI/Zed 사용자 + free + open-source + sandbox" 로 좁아짐 (소멸은 아님).
+- 5월에 Swift native macOS MCP 5+ 진입 (대부분 0-1 star, first-mover window 1-2주).
+- mac-pilot-mcp는 어떤 디렉토리에도 등재 0건 (awesome-mcp-servers, mcpservers.org, mcp.directory).
+
+### 자체 평가 신뢰도 (reviewer 시점)
+
+- v2 (53.9): 자기 비판 정직, dead code 인정, sycophancy 0 → reliability 80/100
+- v3 (85.5): risk section은 정직하나 scoring table 인플레, rubric 자기 모순 → **reliability 38/100**
+
+### 정직한 v4 점수
+
+```
+A 7×17 = 11.9
+B 6×14 =  8.4
+C 6×13 =  7.8
+D 8×9  =  7.2
+E 8×9  =  7.2
+F 8×10 =  8.0
+G 7×8  =  5.6
+H 6×8  =  4.8
+I 1×6  =  0.6
+J 5×6  =  3.0
+─────────────
+Total = 64.5 / 100
+```
+
+### v4 → 정직한 향후 경로
+
+자체 85.5는 inflation. 실제 코드 작업으로 도달 가능한 정직한 상한:
+
+| 단계 | 점수 | 코스트 |
+|------|------|--------|
+| v4 현재 | 64.5 | — |
+| Phase 1-2 (truth-up + 실수정) | ~70 | 3-4h |
+| Phase 3 (promotion loop 실동작) | ~72 | 3-4h |
+| Phase 4 (security 실강화) | ~75 | 2h |
+| Phase 5 (v0.4.1 publish + 디렉토리 PR) | ~77 | 2h |
+| 6주 후 (디렉토리 등재 누적 stars) | ~83 | 외부 |
+
+**Anthropic native 위협 반영 시 정직한 상한 ≈ 83**. 90+ 도달 불가 (TAM 천장 낮춤).
+
+### v4 결론
+
+- 자체 평가는 메커니즘적으로 inflation 발생 (작성자 = 채점자)
+- 외부 reviewer 활용이 정직한 채점에 필수
+- 다음 사이클부터 reviewer 결과를 *진행 전* score에 반영해야 함 (사후 인정 X)
+- "Phase X 완료 후 점수 +Npt 예상" 자체 예측 신뢰 금지 — 항상 외부 측정
+
+
+
 ## v3 결과물 인덱스
 
 작성된 파일 (15개):
