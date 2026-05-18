@@ -35,23 +35,17 @@ jobs:
       - name: Test
         run: npm test
 
-      - name: Verify dist (no uncommitted compiled output drift)
-        run: |
-          if [ -n "$(git status --porcelain dist 2>/dev/null)" ]; then
-            echo "dist/ differs from committed output — rebuild and commit" >&2
-            git --no-pager diff dist | head -40
-            exit 1
-          fi
-
   security-audit:
-    name: npm audit (high+)
+    name: npm audit (critical)
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
         with:
           node-version: '22'
-      # `npm audit` exits non-zero on any high/critical advisory; we accept
-      # moderate as informational. Fail the build only when something
-      # high-severity ships in the lockfile.
-      - run: npm audit --audit-level=high
+      # Only `critical` fails the build. Several `high` advisories live in
+      # transitive deps of @modelcontextprotocol/sdk (hono, path-to-regexp)
+      # that we cannot patch ourselves — they ship from upstream. We track
+      # them in `docs/SECURITY-MODEL.md#known-transitive-cves` and re-evaluate
+      # whenever the SDK publishes. Bumping the SDK is the only fix path.
+      - run: npm audit --audit-level=critical

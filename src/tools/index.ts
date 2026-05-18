@@ -20,7 +20,9 @@ import { handleMacClipboard } from './clipboard.js';
 export const tools: Tool[] = [
   {
     name: 'mac_run',
-    description: `Execute a macOS action. Supported actionTypes: applescript, jxa, shell, open, click, type, keypress.
+    description: `Run an AppleScript/JXA/shell command or send click/type/keypress to macOS.
+
+Supported actionTypes: applescript, jxa, shell, open, click, type, keypress.
 
 Examples:
   - Open Safari: { actionType: "open", target: "Safari" }
@@ -57,16 +59,16 @@ Limitations:
   },
   {
     name: 'mac_state',
-    description: `Inspect current macOS state (read-only). Returns frontmost app, window list, clipboard, Finder selection, and/or running apps.
+    description: `Read current macOS state: frontmost app, windows, Finder selection, running apps.
 
 Examples:
   - All state: {} (returns everything)
-  - Just clipboard + frontmost: { include: ["clipboard", "frontmost_app"] }
   - Window list only: { include: ["windows"] }
+  - Frontmost app: { include: ["frontmost_app"] }
 
 Limitations:
-  - Window list uses Accessibility and only shows windows from apps the client has been granted access to.
-  - Clipboard returns the text representation only — images/files appear as their typed name.`,
+  - Window list requires Accessibility for the apps you want to see.
+  - "clipboard" still works but \`mac_clipboard\` is preferred (lighter + write support).`,
     inputSchema: {
       type: 'object',
       properties: {
@@ -83,7 +85,7 @@ Limitations:
   },
   {
     name: 'mac_find_ui',
-    description: `Find UI elements in an app via the macOS Accessibility API. Returns role, title, position, and size.
+    description: `Find UI elements (role, title, position, size) in an app via Accessibility, with optional Electron CDP fallback.
 
 Examples:
   - All buttons in Safari: { app: "Safari", role: "AXButton" }
@@ -153,7 +155,7 @@ Limitations:
   },
   {
     name: 'mac_recipe_save',
-    description: `Save a multi-step automation as a named recipe. Parameters use {{name}} placeholders, substituted at run time (JSON-safe, supports quotes/backslashes/newlines).
+    description: `Save a multi-step automation as a named recipe. {{param}} placeholders are JSON-safe substituted.
 
 Example:
   {
@@ -234,7 +236,7 @@ Limitations:
   },
   {
     name: 'mac_recipe_search',
-    description: `Search recipes (and optionally raw action history) by natural-language query. Call this BEFORE writing new AppleScript — 118 built-in recipes cover most common tasks.
+    description: `Search 118 built-in + saved recipes by natural-language query. Call this BEFORE writing new AppleScript.
 
 Examples:
   - { query: "dark mode" } → matches toggle-dark-mode, get-dark-mode
@@ -255,7 +257,7 @@ Limitations:
   },
   {
     name: 'mac_recipe_export',
-    description: `Export saved recipes as a portable .mac-recipe.json bundle. By default, only user-added recipes (not the 118 built-ins) are exported.
+    description: `Export user-saved recipes as a portable .mac-recipe.json bundle (built-ins excluded by default).
 
 Examples:
   - Export one recipe inline: { name: "open-url-in-private" }
@@ -275,7 +277,7 @@ Limitations: outputPath must resolve under $HOME and end with .json.`,
   },
   {
     name: 'mac_recipe_import',
-    description: `Import a .mac-recipe.json bundle from inline data or a file path.
+    description: `Import a .mac-recipe.json bundle (inline or file path). Conflict policy: skip | rename | replace.
 
 Examples:
   - From file: { inputPath: "~/recipes/team-bundle.json" }
@@ -301,7 +303,7 @@ Limitations:
   },
   {
     name: 'mac_permissions',
-    description: `Check macOS Privacy & Security permissions (Automation, Accessibility, Screen Recording) for the current MCP client. Returns a deep-link to the relevant Privacy preferences pane if a permission is missing.
+    description: `Check macOS Privacy permissions (Automation/Accessibility/Screen Recording) + deep-link to grant.
 
 Examples:
   - { check: "all" } → return state of all 3 permissions
@@ -323,7 +325,7 @@ Limitations:
   },
   {
     name: 'mac_clipboard',
-    description: `Read or write the system clipboard. Separated from \`mac_state\` so reads/writes don't require pulling the rest of system state.
+    description: `Read / write / clear the macOS clipboard (text only, via pbpaste/pbcopy).
 
 Examples:
   - Read text: { action: "read" }

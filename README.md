@@ -234,7 +234,7 @@ mac_find_ui { "app": "Finder", "searchText": "Downloads" }
 **Electron apps (VSCode / Cursor / Slack / Discord)** — macOS Accessibility
 exposes a thin tree for Electron, so Mac-Pilot can optionally fall back to
 Chrome DevTools Protocol when the app is launched with
-`--remote-debugging-port=<PORT>`. See [docs/ELECTRON-SUPPORT.md](docs/ELECTRON-SUPPORT.md).
+`--remote-debugging-port=<PORT>`. See [docs/ELECTRON-SUPPORT.md](https://github.com/leesgit/mac-pilot-mcp/blob/main/docs/ELECTRON-SUPPORT.md).
 
 ```json
 mac_find_ui {

@@ -146,6 +146,27 @@ Windows (better-sqlite3 is portable; the project is macOS-targeted).
 - **Apple-event spoofing from a co-located process with the same UID.** TCC
   scope is per-app; we inherit whatever the client got granted.
 
+## Known transitive CVEs (accepted)
+
+`@modelcontextprotocol/sdk@1.27.x` pulls in `hono` and `path-to-regexp` whose
+recent versions carry `high`-severity ReDoS advisories. Mac-Pilot does not
+expose either to untrusted input (no HTTP server, no router) — they are
+indirect deps of the SDK's internal helpers. We cannot patch them locally;
+they ship through upstream SDK releases.
+
+CI gates on `critical` only (`--audit-level=critical`) so a single upstream
+`high` does not stop publish. We re-check `npm audit` on every SDK bump
+and ship a patch release the same day if an advisory becomes exploitable
+through our surface (e.g., if we ever expose an HTTP transport).
+
+| Advisory | Affected dep | Severity | Mac-Pilot surface? | Action |
+|----------|--------------|----------|---------------------|--------|
+| hono ReDoS family (multiple) | hono (transitive of @modelcontextprotocol/sdk) | high | none — stdio only, no HTTP server | wait for SDK bump |
+| path-to-regexp 8.0.0-8.3.0 ReDoS | path-to-regexp (transitive) | high | none — no router | wait for SDK bump |
+
+If you need a zero-`high` audit, pin `@modelcontextprotocol/sdk` to a version
+whose lockfile resolves to patched transitive deps when one lands.
+
 ## Test coverage
 
 `tests/security.test.ts` exercises 60+ scenarios at the time of writing,
